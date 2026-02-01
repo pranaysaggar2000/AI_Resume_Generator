@@ -153,7 +153,7 @@ def get_styles():
     styles.add(ParagraphStyle(
         name='NameHeader',
         fontName='Times-Bold',
-        fontSize=21,      # User requested 21
+        fontSize=21,
         alignment=TA_CENTER,
         leading=25,       # Adjusted leading
         spaceAfter=2
@@ -173,7 +173,7 @@ def get_styles():
     styles.add(ParagraphStyle(
         name='SectionHeader',
         fontName='Times-Bold',
-        fontSize=12,      # User requested 12
+        fontSize=12,
         alignment=TA_LEFT,
         spaceBefore=2,
         spaceAfter=2,
@@ -185,7 +185,7 @@ def get_styles():
     styles.add(ParagraphStyle(
         name='BoldEntry',
         fontName='Times-Bold',
-        fontSize=11,      # User requested 11
+        fontSize=11,
         leading=13        # Adjusted leading
     ))
 
@@ -193,7 +193,7 @@ def get_styles():
     styles.add(ParagraphStyle(
         name='ItalicEntry',
         fontName='Times-Italic',
-        fontSize=10,      # User requested Body Text 10
+        fontSize=10,
         leading=12
     ))
     
@@ -201,7 +201,7 @@ def get_styles():
     styles.add(ParagraphStyle(
         name='BulletPoint',
         fontName='Times-Roman',
-        fontSize=10,      # User requested Body Text 10
+        fontSize=10,
         leftIndent=14,       # Text block indentation (moved left by 1pt)
         firstLineIndent=-9,   # Bullet position (14 + (-9) = 5, same as before)
         spaceBefore=1.5,
@@ -213,7 +213,7 @@ def get_styles():
     styles.add(ParagraphStyle(
         name='SummaryStyle',
         fontName='Times-Roman',
-        fontSize=10,      # User requested Body Text 10
+        fontSize=10,
         leading=12,
         alignment=TA_JUSTIFY,
         firstLineIndent=0,
@@ -226,7 +226,7 @@ def get_styles():
     styles.add(ParagraphStyle(
         name='SkillEntry',
         fontName='Times-Roman',
-        fontSize=10,      # User requested Body Text 10
+        fontSize=10,
         leading=12,
         alignment=TA_JUSTIFY,
         firstLineIndent=0,
@@ -309,7 +309,7 @@ def generate_resume(data, filename):
     story.append(Paragraph(data['name'], styles['NameHeader']))
     story.append(Paragraph(data['contact'], styles['ContactLine']))
 
-    # 2. Summary (from your specific profile) [cite: 4, 5]
+    # 2. Summary
     story.append(Paragraph("Summary", styles['SectionHeader']))
     story.append(create_hr_line())
     story.append(Spacer(1, 3))
@@ -317,7 +317,7 @@ def generate_resume(data, filename):
     story.append(Paragraph(data['summary'], styles['SummaryStyle']))
     story.append(Spacer(1, 2))
 
-    # 3. Education [cite: 8, 10]
+    # 3. Education
     story.append(Paragraph("Education", styles['SectionHeader']))
     story.append(create_hr_line())
     story.append(Spacer(1, 3))
@@ -327,7 +327,7 @@ def generate_resume(data, filename):
         story.append(Paragraph(f"• {edu['gpa']}", styles['BulletPoint']))
         story.append(Spacer(1, 2))
 
-    # 4. Technical Knowledge [cite: 13, 16, 18]
+    # 4. Technical Knowledge
     # Moved above Work Experience as requested
     story.append(Paragraph("Technical Knowledge", styles['SectionHeader']))
     story.append(create_hr_line())
@@ -339,7 +339,7 @@ def generate_resume(data, filename):
         story.append(Paragraph(f"• <b>{category}:</b> {clean_skills}", styles['BulletPoint']))
     story.append(Spacer(1, 2))
     
-    # 5. Work Experience [cite: 21, 28]
+    # 5. Work Experience
     story.append(Paragraph("Work Experience", styles['SectionHeader']))
     story.append(create_hr_line())
     story.append(Spacer(1, 1))
@@ -380,51 +380,7 @@ def generate_resume(data, filename):
 
     doc.build(story)
 
-# --- EXECUTION WITH YOUR DATA ---
-if __name__ == "__main__":
-    resume_data = {
-        "name": "Jane Doe",
-        "contact": "San Francisco, CA | +1 555-0199 | jane.doe@example.com | LinkedIn | Portfolio",
-        "summary": "AI/ML Software Engineer with 2+ years of experience architecting scalable Generative AI systems. Expert in fine-tuning LLMs and building RAG architectures.",
-        "education": [
-            {
-                "school": "University of Tech",
-                "degree": "Master of Science, Computer Science",
-                "location": "Boston, MA",
-                "dates": "Sep 2023 – Apr 2025",
-                "gpa": "GPA: 3.8/4.00"
-            }
-        ],
-        "experience": [
-            {
-                "company": "Tech Corp",
-                "role": "Data Science Intern",
-                "location": "San Francisco, CA",
-                "dates": "May 2024 – Aug 2024",
-                "bullets": [
-                    "Improved forecasting accuracy by 18% via lag features and exogenous inputs.",
-                    "Automated pipelines by designing 5+ Airflow DAGs, cutting manual intervention by 60%."
-                ]
-            },
-            {
-                "company": "AI StartUp",
-                "role": "AI Engineer",
-                "location": "New York, NY",
-                "dates": "Jul 2021 – Jul 2023",
-                "bullets": [
-                    "Architected a production-grade RAG pipeline using LangChain and Pinecone serving 2,000+ users.",
-                    "Optimized retrieval performance by implementing hybrid search and Redis caching, reducing latency by 40%."
-                ]
-            }
-        ],
-        "skills": {
-            "Machine Learning & AI": "PyTorch, TensorFlow, NLP & LLMs, RAG Pipelines, LangChain",
-            "Data Engineering": "AWS, GCP, Docker, Kubernetes, Jenkins, Airflow"
-        }
-    }
-    
-    generate_resume(resume_data, "Sample_Resume.pdf")
-    print("Resume generated successfully.")
+
 
 # Adapter for compatibility with main.py
 def create_resume_pdf(data, output_path):

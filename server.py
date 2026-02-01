@@ -21,7 +21,7 @@ os.makedirs(RESUME_DIR, exist_ok=True)
 @app.route('/view/<path:filename>', methods=['GET'])
 def view_resume(filename):
     """Serve the generated resume PDF."""
-    """Serve the generated resume PDF."""
+
     return send_from_directory(RESUME_DIR, filename)
 
 @app.route('/answer_question', methods=['POST'])

@@ -17,7 +17,7 @@ import json
 # Load environment variables
 load_dotenv()
 
-# Configure Gemini - using 1.5-flash for better quota availability
+# Configure Gemini
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel("gemini-2.5-flash")
 

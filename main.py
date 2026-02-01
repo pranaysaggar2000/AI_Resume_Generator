@@ -1,7 +1,6 @@
 """
 Automated Resume Generator
 Tailors a resume based on a Job Description using Google Gemini API.
-Optimized for ~95% ATS match score.
 """
 
 import os
@@ -22,7 +21,6 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel("gemini-2.5-flash")
 
 
-# Model provider options
 # Model provider options
 PROVIDERS = ["gemini", "ollama", "openrouter", "groq"]
 
@@ -96,13 +94,6 @@ def query_groq(prompt: str) -> str:
         print("⚠️ GROQ_API_KEY not found in environment.")
         return ""
         
-    models_chain = [
-        "llama-3.3-70b-versatile",    # Primary: High Quality
-        "llama-3.1-8b-instant",       # Fallback 1: High Speed/Volume (14.4K RPD)
-        "qwen-2.5-32b"                # Fallback 2: Good alternative (using standard ID, Qwen 3 isn't main yet on all lists, but user said qwen3. Table said qwen/qwen3-32b. Let's try likely supported IDs or just use what user gave)
-        # Re-reading prompt table: "qwen/qwen3-32b". Okay.
-    ]
-    # Actually, let's use the exact IDs from the user's provided table
     models_chain = [
          "llama-3.3-70b-versatile",
          "llama-3.1-8b-instant",
