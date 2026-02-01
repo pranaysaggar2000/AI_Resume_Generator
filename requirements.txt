@@ -5,3 +5,4 @@ streamlit>=1.30.0
 flask
 flask-cors
 requests
+pypdf

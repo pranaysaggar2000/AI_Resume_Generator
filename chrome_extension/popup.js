@@ -11,6 +11,92 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let currentViewUrl = '';
 
+    // Restore State
+    chrome.storage.local.get(['lastViewUrl', 'lastStatus', 'lastCompany'], (result) => {
+        if (result.lastViewUrl) {
+            currentViewUrl = result.lastViewUrl;
+            actionsDiv.style.display = 'block';
+            statusDiv.textContent = result.lastStatus || 'Restored previous session.';
+            if (result.lastCompany) {
+                savePathSpan.textContent = `generated_resumes/${result.lastCompany}/...`;
+            }
+        }
+    });
+
+    const setupUI = document.getElementById('setupUI');
+    const mainUI = document.getElementById('mainUI');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const resumeFile = document.getElementById('resumeFile');
+    const profileNameSpan = document.getElementById('profileName');
+    const updateProfileLink = document.getElementById('updateProfileLink');
+
+    // Check Profile Status
+    async function checkProfile() {
+        try {
+            const response = await fetch('http://localhost:8000/profile_status');
+            const data = await response.json();
+
+            if (data.exists) {
+                setupUI.style.display = 'none';
+                mainUI.style.display = 'block';
+                profileNameSpan.textContent = data.name;
+            } else {
+                setupUI.style.display = 'block';
+                mainUI.style.display = 'none';
+            }
+        } catch (e) {
+            console.error("Server not running?", e);
+            // Show main UI as fallback but with error
+            errorDiv.textContent = "Could not connect to server. Is it running?";
+            errorDiv.style.display = 'block';
+            mainUI.style.display = 'block';
+        }
+    }
+
+    // Initial Check
+    checkProfile();
+
+    // Update Profile Link
+    updateProfileLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        setupUI.style.display = 'block';
+        mainUI.style.display = 'none';
+    });
+
+    // Upload Handler
+    uploadBtn.addEventListener('click', async () => {
+        if (!resumeFile.files.length) {
+            alert("Please select a file.");
+            return;
+        }
+
+        const file = resumeFile.files[0];
+        const formData = new FormData();
+        formData.append('file', file);
+
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = "Uploading...";
+
+        try {
+            const response = await fetch('http://localhost:8000/upload_resume', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                checkProfile(); // Refresh view
+            } else {
+                alert("Error: " + (data.error || "Unknown error"));
+            }
+        } catch (e) {
+            alert("Upload failed: " + e.message);
+        } finally {
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = "Upload Resume";
+        }
+    });
+
     // Preview Handler
     previewBtn.addEventListener('click', () => {
         if (currentViewUrl) {
@@ -90,13 +176,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (data.status === 'success' && data.view_url) {
                 currentViewUrl = data.view_url;
+                const companyName = data.view_url.split('/')[4];
 
                 // Show Actions
                 statusDiv.textContent = 'Resume generated successfully!';
                 actionsDiv.style.display = 'block';
-
-                const companyName = data.view_url.split('/')[4]; // extract company from URL
                 savePathSpan.textContent = `generated_resumes/${companyName}/...`;
+
+                // Save State
+                chrome.storage.local.set({
+                    lastViewUrl: currentViewUrl,
+                    lastStatus: 'Resume generated successfully!',
+                    lastCompany: companyName
+                });
             } else {
                 throw new Error("Invalid server response");
             }

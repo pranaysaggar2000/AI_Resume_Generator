@@ -3,7 +3,8 @@ import re
 from urllib.parse import urlparse
 from flask import Flask, request, send_file, jsonify, send_from_directory
 from flask_cors import CORS
-from main import get_base_resume, parse_job_description, tailor_resume, generate_answer
+from main import get_base_resume, parse_job_description, tailor_resume, generate_answer, extract_text_from_pdf, extract_base_resume_info
+import json
 
 
 from resume_builder import create_resume_pdf
@@ -85,7 +86,8 @@ def generate_resume():
         
         # 4. Generate PDF
         print(f"Generating PDF for {company_name}...")
-        filename = "Pranay_Saggar_Resume.pdf"
+        safe_name = base_resume.get('name', 'Resume').replace(" ", "_")
+        filename = f"{safe_name}.pdf"
         output_path = os.path.join(company_dir, filename)
             
         create_resume_pdf(tailored_resume, output_path)
@@ -107,6 +109,61 @@ def generate_resume():
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify({"status": "ok"}), 200
+
+@app.route('/profile_status', methods=['GET'])
+def profile_status():
+    """Check if a user profile exists."""
+    profile_path = os.path.join(BASE_DIR, 'user_profile.json')
+    if os.path.exists(profile_path):
+        try:
+            with open(profile_path, 'r') as f:
+                data = json.load(f)
+                return jsonify({"exists": True, "name": data.get('name', 'User')})
+        except:
+            return jsonify({"exists": False})
+    return jsonify({"exists": False})
+
+@app.route('/upload_resume', methods=['POST'])
+def upload_resume_endpoint():
+    """Handle resume upload from extension."""
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+        
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+        
+    try:
+        # Save temp file
+        temp_path = os.path.join(BASE_DIR, "temp_upload.pdf")
+        file.save(temp_path)
+        
+        # Open and extract
+        with open(temp_path, "rb") as f:
+            text = extract_text_from_pdf(f)
+            
+        if not text:
+             return jsonify({"error": "Could not extract text from PDF"}), 400
+             
+        # Extract details with AI
+        profile_data = extract_base_resume_info(text)
+        
+        if not profile_data or not profile_data.get("name"):
+            return jsonify({"error": "Failed to extract profile data"}), 400
+            
+        # Save user_profile.json
+        profile_path = os.path.join(BASE_DIR, 'user_profile.json')
+        with open(profile_path, "w") as f:
+            json.dump(profile_data, f, indent=4)
+            
+        # Clean up
+        os.remove(temp_path)
+        
+        return jsonify({"status": "success", "name": profile_data.get("name")})
+        
+    except Exception as e:
+        print(f"Error in upload: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     print("🚀 Starting Resume Generator Server on port 8000...")

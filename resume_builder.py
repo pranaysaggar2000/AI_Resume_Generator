@@ -53,13 +53,13 @@ def calculate_exact_resume_height(data: dict, styles: dict = None) -> float:
     # SectionHeader: spaceBefore=2, leading=14, spaceAfter=2
     total_height += 2 + 14 + 2  # Section header
     total_height += 2   # HR line table
-    total_height += 4   # Spacer(1, 4)
+    total_height += 3   # Spacer(1, 3)
     total_height += get_real_paragraph_height(data.get('summary', ''), styles['SummaryStyle'], CONTENT_WIDTH)
     total_height += 2   # Spacer(1, 2)
     
     # Education section
     if 'education' in data and data['education']:
-        total_height += 2 + 14 + 2 + 2 + 4  # Section header + HR + Spacer
+        total_height += 2 + 14 + 2 + 2 + 3  # Section header + HR + Spacer
         for edu in data['education']:
             # create_aligned_row for school/dates (BoldEntry)
             h_school = get_real_paragraph_height(edu['school'], styles['BoldEntry'], CONTENT_WIDTH * 0.75)
@@ -81,7 +81,7 @@ def calculate_exact_resume_height(data: dict, styles: dict = None) -> float:
     
     # Technical Knowledge (Skills)
     if 'skills' in data and data['skills']:
-        total_height += 2 + 14 + 2 + 2 + 4  # Section header + HR + Spacer
+        total_height += 2 + 14 + 2 + 2 + 3  # Section header + HR + Spacer
         for category, skills_str in data['skills'].items():
             total_height += 1.5  # BulletPoint spaceBefore
             total_height += get_real_paragraph_height(f"• <b>{category}:</b> {skills_str}", styles['BulletPoint'], CONTENT_WIDTH)
@@ -89,7 +89,7 @@ def calculate_exact_resume_height(data: dict, styles: dict = None) -> float:
     
     # Work Experience
     if 'experience' in data and data['experience']:
-        total_height += 2 + 14 + 2 + 2 + 2  # Section header + HR + Spacer(1, 2)
+        total_height += 2 + 14 + 2 + 2 + 1  # Section header + HR + Spacer(1, 1)
         for exp in data['experience']:
             # BoldEntry (company)
             h_comp = get_real_paragraph_height(exp['company'], styles['BoldEntry'], CONTENT_WIDTH * 0.75)
@@ -108,7 +108,7 @@ def calculate_exact_resume_height(data: dict, styles: dict = None) -> float:
     
     # Projects
     if 'projects' in data and data['projects']:
-        total_height += 2 + 14 + 2 + 2 + 2  # Section header + HR + Spacer
+        total_height += 2 + 14 + 2 + 2 + 1  # Section header + HR + Spacer
         for proj in data['projects']:
             # create_aligned_row for project name/dates
             h_name = get_real_paragraph_height(proj.get('name', ''), styles['BoldEntry'], CONTENT_WIDTH * 0.75)
@@ -122,7 +122,7 @@ def calculate_exact_resume_height(data: dict, styles: dict = None) -> float:
     
     # Leadership
     if 'leadership' in data and data['leadership']:
-        total_height += 2 + 14 + 2 + 2 + 2  # Section header + HR + Spacer
+        total_height += 2 + 14 + 2 + 2 + 1  # Section header + HR + Spacer
         for lead in data['leadership']:
             h_role = get_real_paragraph_height(lead.get('role', ''), styles['BoldEntry'], CONTENT_WIDTH * 0.75)
             h_dates = get_real_paragraph_height(lead.get('dates', ''), styles['BoldEntry'], CONTENT_WIDTH * 0.25)
@@ -312,7 +312,7 @@ def generate_resume(data, filename):
     # 2. Summary (from your specific profile) [cite: 4, 5]
     story.append(Paragraph("Summary", styles['SectionHeader']))
     story.append(create_hr_line())
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 3))
     # Use SummaryStyle instead of BulletPoint to fix indentation issue
     story.append(Paragraph(data['summary'], styles['SummaryStyle']))
     story.append(Spacer(1, 2))
@@ -320,7 +320,7 @@ def generate_resume(data, filename):
     # 3. Education [cite: 8, 10]
     story.append(Paragraph("Education", styles['SectionHeader']))
     story.append(create_hr_line())
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 3))
     for edu in data['education']:
         story.append(create_aligned_row(edu['school'], edu['dates'], styles['BoldEntry']))
         story.append(create_aligned_row(edu['degree'], edu['location'], styles['ItalicEntry']))
@@ -331,7 +331,7 @@ def generate_resume(data, filename):
     # Moved above Work Experience as requested
     story.append(Paragraph("Technical Knowledge", styles['SectionHeader']))
     story.append(create_hr_line())
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 3))
     for category, skills in data['skills'].items():
         # Strip all HTML tags from skills to ensure they are NOT bold
         # Only the category should be bold
@@ -342,7 +342,7 @@ def generate_resume(data, filename):
     # 5. Work Experience [cite: 21, 28]
     story.append(Paragraph("Work Experience", styles['SectionHeader']))
     story.append(create_hr_line())
-    story.append(Spacer(1, 2))
+    story.append(Spacer(1, 1))
     for exp in data['experience']:
         story.append(create_aligned_row(exp['company'], exp['dates'], styles['BoldEntry']))
         story.append(create_aligned_row(exp['role'], exp['location'], styles['ItalicEntry']))
@@ -354,7 +354,7 @@ def generate_resume(data, filename):
     if 'projects' in data and data['projects']:
         story.append(Paragraph("Research and Projects", styles['SectionHeader']))
         story.append(create_hr_line())
-        story.append(Spacer(1, 2))
+        story.append(Spacer(1, 1))
         for proj in data['projects']:
             # Use create_aligned_row to show Name and Duration (if available)
             proj_name = proj.get('name', 'Project')
@@ -370,7 +370,7 @@ def generate_resume(data, filename):
     if 'leadership' in data and data['leadership']:
         story.append(Paragraph("Leadership Experience", styles['SectionHeader']))
         story.append(create_hr_line())
-        story.append(Spacer(1, 2))
+        story.append(Spacer(1, 1))
         for lead in data['leadership']:
             story.append(create_aligned_row(lead['organization'], lead['dates'], styles['BoldEntry']))
             story.append(create_aligned_row(lead['title'], lead['location'], styles['ItalicEntry']))
@@ -383,12 +383,12 @@ def generate_resume(data, filename):
 # --- EXECUTION WITH YOUR DATA ---
 if __name__ == "__main__":
     resume_data = {
-        "name": "Pranay Saggar",
-        "contact": "San Francisco, CA | +1 8572346569 | pranaysaggar@gmail.com | LinkedIn | Portfolio",
+        "name": "Jane Doe",
+        "contact": "San Francisco, CA | +1 555-0199 | jane.doe@example.com | LinkedIn | Portfolio",
         "summary": "AI/ML Software Engineer with 2+ years of experience architecting scalable Generative AI systems. Expert in fine-tuning LLMs and building RAG architectures.",
         "education": [
             {
-                "school": "Northeastern University",
+                "school": "University of Tech",
                 "degree": "Master of Science, Computer Science",
                 "location": "Boston, MA",
                 "dates": "Sep 2023 – Apr 2025",
@@ -397,7 +397,7 @@ if __name__ == "__main__":
         ],
         "experience": [
             {
-                "company": "EazyML",
+                "company": "Tech Corp",
                 "role": "Data Science Intern",
                 "location": "San Francisco, CA",
                 "dates": "May 2024 – Aug 2024",
@@ -407,9 +407,9 @@ if __name__ == "__main__":
                 ]
             },
             {
-                "company": "White Tree Devices",
+                "company": "AI StartUp",
                 "role": "AI Engineer",
-                "location": "Delhi, India",
+                "location": "New York, NY",
                 "dates": "Jul 2021 – Jul 2023",
                 "bullets": [
                     "Architected a production-grade RAG pipeline using LangChain and Pinecone serving 2,000+ users.",
@@ -423,7 +423,7 @@ if __name__ == "__main__":
         }
     }
     
-    generate_resume(resume_data, "Pranay_Saggar_Resume_Replicated.pdf")
+    generate_resume(resume_data, "Sample_Resume.pdf")
     print("Resume generated successfully.")
 
 # Adapter for compatibility with main.py
@@ -482,8 +482,8 @@ def create_resume_pdf(data, output_path):
     # 4. Initial trimming - start with 3 bullets per project (will trim further if needed)
     new_data = trim_projects_to_fit(new_data, max_bullets_initial=3)
     
-    # 5. Trim skills to max 6 lines
-    new_data = trim_skills_to_fit(new_data, max_lines=6)
+    # 5. Trim skills to max 5 lines
+    new_data = trim_skills_to_fit(new_data, max_lines=5)
     
     # 6. Iteratively trim until the resume fits on one page
     estimated_height = estimate_resume_height(new_data)

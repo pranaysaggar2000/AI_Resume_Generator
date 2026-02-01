@@ -10,8 +10,8 @@ import re
 from dotenv import load_dotenv
 import google.generativeai as genai
 from resume_builder import create_resume_pdf
-
-
+import io
+import pypdf
 import requests
 
 # Load environment variables
@@ -23,7 +23,8 @@ model = genai.GenerativeModel("gemini-2.5-flash")
 
 
 # Model provider options
-PROVIDERS = ["gemini", "ollama", "openrouter"]
+# Model provider options
+PROVIDERS = ["gemini", "ollama", "openrouter", "groq"]
 
 
 def query_ollama(prompt: str, model_name: str = "llama3.1:8b") -> str:
@@ -85,6 +86,63 @@ def query_openrouter(prompt: str, model_name: str = "arcee-ai/trinity-large-prev
         print(f"⚠️ OpenRouter Connection Error: {e}")
         return ""
 
+def query_groq(prompt: str) -> str:
+    """
+    Query Groq API with robust fallback chain.
+    Chain: Llama 3.3 70B (Quality) -> Llama 3.1 8B (Speed/Volume) -> Qwen 32B (Backup)
+    """
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        print("⚠️ GROQ_API_KEY not found in environment.")
+        return ""
+        
+    models_chain = [
+        "llama-3.3-70b-versatile",    # Primary: High Quality
+        "llama-3.1-8b-instant",       # Fallback 1: High Speed/Volume (14.4K RPD)
+        "qwen-2.5-32b"                # Fallback 2: Good alternative (using standard ID, Qwen 3 isn't main yet on all lists, but user said qwen3. Table said qwen/qwen3-32b. Let's try likely supported IDs or just use what user gave)
+        # Re-reading prompt table: "qwen/qwen3-32b". Okay.
+    ]
+    # Actually, let's use the exact IDs from the user's provided table
+    models_chain = [
+         "llama-3.3-70b-versatile",
+         "llama-3.1-8b-instant",
+         "qwen/qwen3-32b" 
+    ]
+
+    for model_id in models_chain:
+        try:
+            print(f"   ⚡ Groq: Attempting with {model_id}...")
+            response = requests.post(
+                url="https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": model_id,
+                    "messages": [
+                        {"role": "user", "content": prompt}
+                    ]
+                },
+                timeout=60 # Fast inference
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                return data.get('choices', [{}])[0].get('message', {}).get('content', '')
+            
+            elif response.status_code == 429:
+                print(f"   ⚠️ Groq Rate Limit ({model_id}): Switching to fallback...")
+                continue # Try next model
+            else:
+                print(f"   ⚠️ Groq Error ({model_id}): {response.status_code} - {response.text}")
+                continue # Try next model
+                
+        except Exception as e:
+            print(f"   ⚠️ Groq Connection Error ({model_id}): {e}")
+            continue
+            
+    return "" # All failed
 
 def query_provider(prompt: str, provider: str = "gemini") -> str:
     """Query the specified AI provider."""
@@ -94,10 +152,129 @@ def query_provider(prompt: str, provider: str = "gemini") -> str:
     elif provider == "openrouter":
         print("   Using OpenRouter (Cloud)...")
         return query_openrouter(prompt)
+    elif provider == "groq":
+        return query_groq(prompt)
     else:  # Default to gemini
         print("   Using Gemini (Cloud)...")
-        response = model.generate_content(prompt)
-        return response.text
+        try:
+            response = model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            # Fallback mechanism
+            error_msg = str(e).lower()
+            if "429" in error_msg or "resource exhausted" in error_msg or "quota" in error_msg or "500" in error_msg or "internal" in error_msg:
+                print(f"   ⚠️ Gemini Error: {e}")
+                print("   🔄 Switching to Fallback Config: Gemma 3 27B Instruct...")
+                try:
+                    fallback_model = genai.GenerativeModel("gemma-3-27b-it")
+                    response = fallback_model.generate_content(prompt)
+                    return response.text
+                except Exception as fallback_e:
+                    print(f"   ❌ Fallback Failed: {fallback_e}")
+                    raise e # Re-raise original error if fallback also fails
+            else:
+                raise e
+
+
+def extract_text_from_pdf(file_stream) -> str:
+    """Extract text from a PDF file stream."""
+    try:
+        reader = pypdf.PdfReader(file_stream)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text() + "\n"
+            
+            # Extract links from annotations
+            if "/Annots" in page:
+                for annot in page["/Annots"]:
+                    obj = annot.get_object()
+                    if "/A" in obj and "/URI" in obj["/A"]:
+                        uri = obj["/A"]["/URI"]
+                        text += f" [Extracted Link: {uri}] "
+        
+        return text
+    except Exception as e:
+        print(f"Error extracting text from PDF: {e}")
+        return ""
+
+
+def extract_base_resume_info(resume_text: str) -> dict:
+    """
+    Extract base resume information from text using Gemini.
+    Returns a JSON dict matching the get_base_resume structure.
+    """
+    prompt = f"""
+    Extract the following information from the resume text into a strict JSON format.
+    
+    IMPORTANT: Look for "[Extracted Link: ...]" patterns in the text to identify LinkedIn and Portfolio URLs if they are not explicitly written out.
+    
+    Resume Text:
+    {resume_text}
+    
+    Required JSON Structure:
+    {{
+        "name": "Full Name",
+        "contact": {{
+            "location": "City, State",
+            "phone": "Phone Number",
+            "email": "Email",
+            "linkedin_url": "Full LinkedIn URL",
+            "portfolio_url": "Portfolio URL (optional)"
+        }},
+        "summary": "Professional summary",
+        "education": [
+            {{
+                "institution": "University Name",
+                "degree": "Degree Name",
+                "gpa": "GPA (optional)",
+                "dates": "Start - End Date",
+                "location": "City, State"
+            }}
+        ],
+        "skills": {{
+            "Category Name 1": "Skill1, Skill2, Skill3",
+            "Category Name 2": "Skill1, Skill2, Skill3"
+        }},
+        "experience": [
+            {{
+                "company": "Company Name",
+                "title": "Job Title",
+                "dates": "Start - End Date",
+                "location": "City, State",
+                "bullets": ["Bullet 1", "Bullet 2", "etc"]
+            }}
+        ],
+        "projects": [
+            {{
+                "name": "Project Name",
+                "dates": "Date Range",
+                "bullets": ["Bullet 1", "Bullet 2"]
+            }}
+        ],
+        "leadership": [
+            {{
+                "organization": "Org Name",
+                "title": "Role Title",
+                "dates": "Date Range",
+                "location": "City, State",
+                "bullets": ["Bullet 1"]
+            }}
+        ]
+    }}
+    
+    Ensure all fields are filled based on the text. If a field is missing, use an empty string or empty list.
+    Do not invent information.
+    """
+    
+    try:
+        response_text = query_provider(prompt, provider="gemini")
+        json_match = re.search(r'\{[\s\S]*\}', response_text)
+        if json_match:
+            return json.loads(json_match.group())
+    except Exception as e:
+        print(f"Error extracting resume info: {e}")
+    
+    return {} # Return empty if failure
 
 
 def trim_projects_to_fit(resume_data: dict, max_bullets_initial: int = 3, min_bullets: int = 2, min_projects: int = 2) -> dict:
@@ -185,10 +362,13 @@ def trim_projects_further(resume_data: dict, target_reduction: int, min_bullets:
     return resume_data
 
 
-def trim_skills_to_fit(resume_data: dict, max_lines: int = 6) -> dict:
+def trim_skills_to_fit(resume_data: dict, max_lines: int = 5) -> dict:
     """
-    Trim skills section. Each category can span up to 2 lines (~190 chars total).
-    Skills are pre-ranked by JD relevance (most relevant first).
+    Trim skills section to fit strictly within max_lines (default 5).
+    Strategy:
+    1. Distribute lines among categories based on priority (keys order).
+    2. Fill each category until it consumes its allocated lines.
+    3. Stop when total lines used reaches limit.
     """
     if 'skills' not in resume_data:
         return resume_data
@@ -199,147 +379,88 @@ def trim_skills_to_fit(resume_data: dict, max_lines: int = 6) -> dict:
     if num_categories == 0:
         return resume_data
     
-    # If we have more categories than max_lines, trim categories
-    if num_categories > max_lines:
-        keys = list(skills.keys())[:max_lines]
-        resume_data['skills'] = {k: skills[k] for k in keys}
-        skills = resume_data['skills']
+    # CHAR constants (approximate for 10pt font)
+    # 1 line = ~90 chars
+    CHARS_PER_LINE = 90
     
-    # Allow each category to span up to 2 lines (~190 chars)
-    MAX_CHARS_PER_CATEGORY = 180  # ~2 lines at 10pt font
+    final_skills = {}
+    lines_used = 0
     
     for category, skill_str in skills.items():
-        # Account for bullet point and category name
-        prefix_len = len(f"• {category}: ")
-        available_chars = MAX_CHARS_PER_CATEGORY - prefix_len
+        if lines_used >= max_lines:
+            break
+            
+        remaining_lines = max_lines - lines_used
         
+        # Calculate how many lines this category WANTS
+        # Prefix "• Category: "
+        prefix_len = len(f"• {category}: ")
         skill_list = [s.strip() for s in skill_str.split(',')]
-        trimmed_skills = []
+        
+        # We can give this category at most 2 lines, unless it's the only one left and we have space
+        # But generally 2 lines per category is a good max density
+        allowed_lines_for_cat = min(remaining_lines, 2)
+        
+        max_chars = allowed_lines_for_cat * CHARS_PER_LINE
+        available_chars = max_chars - prefix_len
+        
+        if available_chars <= 0:
+            continue
+            
+        trimmed_list = []
         current_len = 0
         
         for skill in skill_list:
-            skill_len = len(skill) + 2  # +2 for ", "
+            skill_len = len(skill) + 2 # ", "
             if current_len + skill_len <= available_chars:
-                trimmed_skills.append(skill)
+                trimmed_list.append(skill)
                 current_len += skill_len
             else:
-                break  # Stop - we've filled 2 lines (remaining are least relevant)
+                break
         
-        skills[category] = ', '.join(trimmed_skills)
-    
+        if trimmed_list:
+            final_skills[category] = ', '.join(trimmed_list)
+            # Estimate actual lines used by this category
+            # (current_len + prefix) / 90, rounded up
+            total_cat_chars = current_len + prefix_len
+            lines_consumed = -(-total_cat_chars // CHARS_PER_LINE) # Ceiling division
+            lines_used += lines_consumed
+            
+    resume_data['skills'] = final_skills
     return resume_data
 
 
 def get_base_resume() -> dict:
     """
-    Returns the source-of-truth resume data based on Pranay Saggar's official resume.
+    Returns the source-of-truth resume data. 
+    Tries to load from 'user_profile.json' first.
     """
+    profile_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'user_profile.json')
+    
+    if os.path.exists(profile_path):
+        try:
+            with open(profile_path, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading user profile: {e}")
+
+    # Fallback to empty structure or error out in a real app
+    # For now, return a placeholder compatible structure
     return {
-        "name": "Pranay Saggar",
+        "name": "User Name",
         "contact": {
-            "location": "San Francisco, CA",
-            "phone": "+1 8572346569",
-            "email": "pranaysaggar@gmail.com",
-            "linkedin_url": "https://linkedin.com/in/pranay-saggar",
-            "portfolio_url": "https://pranaysaggar.vercel.app/" # Retained from previous context
+            "location": "Location",
+            "phone": "Phone",
+            "email": "Email",
+            "linkedin_url": "",
+            "portfolio_url": ""
         },
-        "summary": (
-            "AI/ML Software Engineer & Researcher with 2+ years of experience architecting scalable "
-            "Generative AI systems and MLOps pipelines. Expert in fine-tuning LLMs, building RAG architectures, "
-            "and deploying high-availability models on AWS and GCP using Kubernetes and Docker. Proficient in "
-            "the full ML lifecycle—from data engineering with Pandas and SQL to optimizing inference latency."
-        ),
-        "education": [
-            {
-                "institution": "Northeastern University (Khoury College of Computer Sciences)",
-                "degree": "Master of Science, Computer Science",
-                "gpa": "3.8/4.00",
-                "dates": "Sep 2023 - Apr 2025",
-                "location": "Boston, MA"
-            },
-            {
-                "institution": "Guru Gobind Singh Indraprastha University",
-                "degree": "Bachelor of Technology, Information Technology",
-                "gpa": "8.97/10.00",
-                "dates": "2018 - 2022",
-                "location": "Delhi, India"
-            }
-        ],
-        "skills": {
-            "Languages & Core": "Python, SQL, Java, C++, Bash, Linux, Git, PostgreSQL, Snowflake, NoSQL",
-            "Machine Learning & AI": (
-                "PyTorch, TensorFlow, Scikit-learn, Pandas, NumPy, XGBoost, NLP & LLMs, RAG Pipelines, "
-                "LangChain, HuggingFace, Time Series Forecasting"
-            ),
-            "Data Engineering & MLOps": (
-                "AWS (EC2/S3), GCP (Vertex AI, Cloud Storage), Azure, Docker, Kubernetes, Jenkins, "
-                "Terraform, Airflow, CI/CD, PowerBI, Ansible"
-            ),
-            "Web & Data": "FastAPI, REST APIs, React, Streamlit, Kafka, Spark, Tableau"
-        },
-        "experience": [
-            {
-                "company": "EazyML",
-                "title": "Data Science Intern",
-                "dates": "May 2024 - Aug 2024",
-                "location": "San Francisco, CA",
-                "bullets": [
-                    "Developed multivariate Time Series forecasting models using Pandas and Scikit-learn.",
-                    "Improved accuracy by 18% via lag features and exogenous inputs.",
-                    "Automated pipelines by designing 5+ Airflow DAGs, cutting manual intervention by 60%."
-                ]
-            },
-            {
-                "company": "White Tree Devices",
-                "title": "AI Engineer",
-                "dates": "Jul 2021 - Jul 2023",
-                "location": "Delhi, India",
-                "bullets": [
-                    "Architected a production-grade RAG pipeline using LangChain and Pinecone to enable semantic search over meeting transcripts, scaling to handle 500+ concurrent requests.",
-                    "Optimized retrieval performance by implementing hybrid search and Redis caching, reducing query latency by 40%.",
-                    "Developed high-concurrency microservices using FastAPI and Celery for asynchronous processing of audio transcripts.",
-                    "Orchestrated containerized deployments on Kubernetes with Horizontal Pod Autoscaling (HPA) and Prometheus monitoring, ensuring 99.5% uptime."
-                ]
-            }
-        ],
-        "projects": [
-            {
-                "name": "Resumatrix",
-                "dates": "Dec 2024 - Apr 2025",
-                "bullets": [
-                    "Developed a real-time SaaS application using FastAPI and Streamlit to score resumes, processing 100+ resumes per minute with <1s latency.",
-                    "Integrated Pinecone and Google Gemini to engineer an intelligent parsing system using OpenAI embeddings for semantic matching."
-                ]
-            },
-            {
-                "name": "Agentic AI Chatbot Generator",
-                "dates": "Apr 2025 - Present",
-                "bullets": [
-                    "Designed an Agentic AI system that autonomously scrapes content and deploys a Generative AI RAG-chatbot.",
-                    "Orchestrated a multi-agent workflow using LangChain and LangGraph for data ingestion, text chunking, and FAISS vector store creation.",
-                    "Automated deployment as a scalable API using Docker and FastAPI on GCP Cloud Run for one-click chatbot creation."
-                ]
-            },
-            {
-                "name": "Prediction and Classification of Student Academic Performance",
-                "dates": "Jan 2022 - Jul 2022",
-                "bullets": [
-                    "Published in ADSAA Journal (ESCI indexed).",
-                    "Achieved 92.27% accuracy using CatBoost with SMOTE analysis for balanced classification."
-                ]
-            }
-        ],
-        "leadership": [
-            {
-                "organization": "Northeastern University",
-                "title": "Graduate Teaching Assistant",
-                "dates": "Jan 2025 - Apr 2025",
-                "location": "Boston, MA",
-                "bullets": [
-                    "Guided 100+ students by conducting labs, clearing doubts, and grading assignments, fostering a productive learning environment."
-                ]
-            }
-        ]
+        "summary": "Please upload your resume to generate a profile.",
+        "education": [],
+        "skills": {},
+        "experience": [],
+        "projects": [],
+        "leadership": []
     }
 
 
@@ -369,10 +490,15 @@ Extract and return this JSON structure:
     "soft_skills": ["communication", "leadership", "etc"],
     "action_verbs": ["developed", "implemented", "etc - verbs used in JD"],
     "industry_terms": ["domain-specific", "terminology"],
-    "years_experience": "number or range if mentioned"
+    "years_experience": "number or range if mentioned",
+    "domain_context": "The industry/sector (e.g., Fintech, AdTech, Healthcare)",
+    "tech_stack_nuances": ["specific versions (Java 17)", "sub-tools (BigQuery, not just GCP)", "specific libraries"],
+    "key_metrics_emphasis": ["scale (millions of users)", "speed (low latency)", "revenue", "efficiency"]
 }}
 
-Be thorough in extracting keywords - include all technologies, methodologies, and tools mentioned.
+Be thorough in extracting keywords.
+- For "tech_stack_nuances", look for specific library names (e.g., "pandas" instead of just "Python") and cloud services (e.g., "Redshift" instead of just "AWS").
+- For "industry_terms", extract business-specific language (e.g., "risk modeling", "patient outcomes", "click-through rate").
 """
     
     try:
@@ -477,20 +603,28 @@ CRITICAL OBJECTIVE: Rewrite the resume to MAXIMIZE ATS keyword matching while ma
 
 === STRICT RULES ===
 
-1. **Location**: Set contact.location to: "{jd_analysis.get('location', 'Remote')}"
+1. **Contact Info**:
+   - Set contact.location to: "{jd_analysis.get('location', 'Remote')}"
+   - **CRITICAL:** You MUST preserve `email`, `phone`, `linkedin_url`, and `portfolio_url` EXACTLY as they appear in the CURRENT RESUME DATA. Do not omit them.
 
-2. **Summary** (2-3 sentences, under 50 words):
-   - Mirror the exact job title from the JD
-   - **CRITICAL:** Candidate is a **2025 New Grad** (Apr 2025). DO NOT change this to 2026.
-   - Ignore JD graduation year requirements if they conflict with 2025.
-   - Include 3-5 high-priority keywords from mandatory_keywords
+2. **Summary** (Target: 2-3 full sentences, ~35-45 words):
+   - Start with the exact Job Title from the JD.
+   - Synthesize the candidate's years of experience with the **top 4 relevant skills**.
+   - Craft a cohesive, professional narrative (avoid fragmented or overly brief sentences).
+   - Aim to fill ~2-3 lines to maximize impact without overflowing.
    - End with a period
 
 3. **Skills Section** (RANKED for trimming):
    - For EACH category, list skills as a comma-separated string
    - ORDER skills by JD relevance (most relevant FIRST)
-   - Include 12-15 skills per category (extras will be trimmed to fit 2 lines)
+   - Include 10-13 skills per category (extras will be trimmed to fit 2 lines)
    - Prioritize mandatory_keywords, then preferred_keywords
+
+   - For EACH category, list skills as a comma-separated string
+   - ORDER skills by JD relevance (most relevant FIRST)
+   - Include 8-10 skills per category (extras will be trimmed)
+   - **CONSTRAINT:** The entire Skills section must NOT exceed 5 lines total.
+   - Prioritize 2-3 key categories derived from JD (e.g., Languages, Frameworks, Tools).
 
 4. **Experience Bullets**:
    - Full-time roles: Generate EXACTLY 4 bullet points. Do not generate more.
@@ -502,10 +636,12 @@ CRITICAL OBJECTIVE: Rewrite the resume to MAXIMIZE ATS keyword matching while ma
    - **METRICS PRIORITY:** Emphasize system performance (throughput, latency, concurrency) over simple volume (user counts) where possible.
    - Each bullet = complete sentence ending with period (.)
 
-5. **Project Bullets** (RANKED - generate 3 per project, use top 3):
-   - For EACH project, generate exactly 5 bullet points ranked by importance
-   - Top 3 bullets will be used (extras for trimming flexibility)
-   - **Ensure detailed explanations** of technical implementation and impact.
+5. **Project Bullets** (RANKED - select TOP 2 projects):
+   - **CRITICAL:** Choose ONLY the 2 most relevant projects for this job. Omit the others.
+   - For EACH of the 2 selected projects, generate exactly 3 bullet points ranked by importance
+   - Top 2 bullets will be used (extras for trimming flexibility)
+   - STRICT LIMIT: Max 2 lines per bullet.
+   - Be concise. Only explain details necessary for context/impact.
    - Integrate keywords naturally
    - Each bullet = complete sentence ending with period (.)
    - Preserve all original metrics
@@ -522,10 +658,13 @@ CRITICAL OBJECTIVE: Rewrite the resume to MAXIMIZE ATS keyword matching while ma
    - Sentences should be clear, direct, and fact-based.
    - When describing AI/ML projects for a generalist Software Engineer role, emphasize the engineering lifecycle (deployment, latency, APIs, Docker, testing) over the theoretical modeling, unless the JD specifically asks for model training.
 
-8. **ATS Optimization**:
-   - Use exact keyword matches from JD (not synonyms)
-   - Include action verbs from the JD
-   - Match industry terminology exactly
+8. **ATS Optimization & Keyword Enrichment (CRITICAL)**:
+   - **Expansion**: Use `tech_stack_nuances` to map broad skills to specifics. If the user lists "GCP" and `tech_stack_nuances` includes "BigQuery ML", **explicitly list BigQuery ML**.
+   - **Specificity**: Replace generic terms with JD-specific techniques (e.g., change "fine-tuning LLMs" to "PEFT/LoRA fine-tuning" if JD asks for LoRA).
+   - **Domain Alignment**: Use `domain_context` to rephrase experience. Ensure the resume reflects the language of the **{jd_analysis.get('domain_context', 'target industry')}**.
+   - **Tech Alternatives**: If a JD requirement is missing (e.g., "Spring"), heavily emphasize the user's equivalent strong alternative (e.g., "FastAPI/Flask") to show transferability.
+   - Use exact keyword matches from JD (not synonyms).
+   - Match industry terminology exactly.
 
 Return the complete resume as valid JSON with the same structure."""
 

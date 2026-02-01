@@ -11,7 +11,8 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 
 from resume_builder import create_resume_pdf
-from main import get_base_resume, parse_job_description, tailor_resume
+from main import get_base_resume, parse_job_description, tailor_resume, extract_text_from_pdf, extract_base_resume_info
+import json
 
 # Load environment variables
 load_dotenv()
@@ -128,10 +129,64 @@ def main():
         
         st.markdown("---")
         st.markdown("### 📋 Resume Preview")
-        st.markdown("""
-        **Name:** Pranay Saggar  
-        **Skills:** Python, ML, LLMs, RAG, Docker, K8s  
-        **Experience:** EazyML, Stealth Startup  
+        
+        # Profile Management
+        profile_path = "user_profile.json"
+        
+        if os.path.exists(profile_path):
+            try:
+                with open(profile_path, "r") as f:
+                    profile_data = json.load(f)
+                
+                st.success(f"✅ Loaded Profile: **{profile_data.get('name', 'Unknown')}**")
+                
+                with st.expander("View Profile Details"):
+                    st.json(profile_data)
+                    
+                if st.button("🔄 Update Profile (Upload New Resume)"):
+                    os.remove(profile_path)
+                    st.rerun()
+                    
+            except Exception as e:
+                st.error(f"Error loading profile: {e}")
+                os.remove(profile_path)
+                st.rerun()
+        else:
+            st.warning("⚠️ No profile found. Please upload your base resume.")
+            uploaded_file = st.file_uploader("Upload Base Resume (PDF)", type=["pdf"])
+            
+            if uploaded_file is not None:
+                with st.spinner("📄 Extracting resume details..."):
+                    try:
+                        text = extract_text_from_pdf(uploaded_file)
+                        if text:
+                            profile_data = extract_base_resume_info(text)
+                            if profile_data.get("name"):
+                                with open(profile_path, "w") as f:
+                                    json.dump(profile_data, f, indent=4)
+                                st.success("🎉 Profile created successfully!")
+                                st.rerun()
+                            else:
+                                st.error("Could not extract valid profile data.")
+                        else:
+                            st.error("Could not extract text from PDF.")
+                    except Exception as e:
+                        st.error(f"Error processing resume: {e}")
+            
+            # Stop execution until profile is loaded
+            if not os.path.exists(profile_path):
+                st.info("👆 Upload your resume to unlock generation.")
+                st.stop()
+        
+        # Load profile (guaranteed to exist here)
+        with open(profile_path, "r") as f:
+            base_resume = json.load(f)
+
+        st.markdown(f"""
+        **Name:** {base_resume.get('name', 'N/A')}  
+        **Location:** {base_resume.get('contact', {}).get('location', 'N/A')}  
+        **Skills:** {len(base_resume.get('skills', {}))} Categories  
+        **Experience:** {len(base_resume.get('experience', []))} Roles  
         """)
     
     st.markdown("---")
@@ -177,7 +232,8 @@ def main():
                 os.makedirs(company_dir, exist_ok=True)
                 
                 # Set output path
-                output_path = os.path.join(company_dir, "Pranay_Saggar_Resume.pdf")
+                safe_name = base_resume.get('name', 'User').replace(" ", "_")
+                output_path = os.path.join(company_dir, f"{safe_name}_Resume.pdf")
                 
             except Exception as e:
                 st.error(f"Error creating folder: {e}")
