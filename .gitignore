@@ -7,3 +7,5 @@ generated_resumes/
 *.pdf
 
 user_profile.json
+
+*.command
