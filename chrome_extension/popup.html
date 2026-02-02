@@ -134,25 +134,55 @@
     <div id="actions" style="display: none; margin-top: 15px;">
       <button id="previewBtn" style="background: #28a745; margin-bottom: 8px;">preview pdf</button>
       <button id="downloadBtn" style="background: #17a2b8; margin-bottom: 8px;">Download PDF</button>
-      <button id="analyzeBtn" style="background: linear-gradient(90deg, #8E2DE2, #4A00E0); margin-bottom: 8px;">📊 Analyze ATS Score</button>
-      
+      <button id="editBtn" style="background: #ffc107; color: #333; margin-bottom: 8px;">✏️ Edit Resume</button>
+      <button id="analyzeBtn" style="background: linear-gradient(90deg, #8E2DE2, #4A00E0); margin-bottom: 8px;">📊
+        Analyze ATS Score</button>
+
       <div style="font-size: 11px; color: #555; margin-top: 5px; text-align: center;">
         Saved to: <span id="savePath" style="font-family: monospace;"></span>
       </div>
     </div>
 
-    <!-- Analysis Results (Hidden by default) -->
-    <div id="analysisResults" style="display: none; margin-top: 15px; border: 1px solid #ddd; border-radius: 6px; padding: 10px; background: #fff;">
-        <h3 style="margin: 0 0 10px 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 5px;">ATS Analysis</h3>
-        
-        <div style="display: flex; align-items: center; margin-bottom: 10px;">
-            <div style="font-size: 24px; font-weight: bold; color: #4A00E0; margin-right: 10px;" id="atsScore">--</div>
-            <div style="font-size: 12px; color: #666;">/ 100 Match Score</div>
-        </div>
+    <!-- Editor UI (Hidden by default) -->
+    <div id="editorUI" style="display: none; margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
+      <h3 style="margin: 0 0 10px 0; font-size: 14px;">Edit Resume Content</h3>
 
-        <div id="analysisDetails" style="font-size: 12px; line-height: 1.4;">
-            <!-- Dynamic content here -->
-        </div>
+      <label for="sectionSelect" style="display: block; font-size: 12px; margin-bottom: 5px;">Select Section:</label>
+      <select id="sectionSelect"
+        style="width: 100%; padding: 6px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px;">
+        <optgroup label="Sections">
+          <option value="summary">Summary</option>
+          <option value="skills">Skills</option>
+          <option value="experience">Experience</option>
+          <option value="projects">Projects</option>
+          <option value="contact">Contact Info (Location/Links)</option>
+        </optgroup>
+      </select>
+
+      <!-- Dynamic Form Container -->
+      <div id="formContainer"
+        style="max-height: 300px; overflow-y: auto; margin-bottom: 10px; border: 1px solid #eee; padding: 5px;"></div>
+
+      <div style="display: flex; gap: 10px;">
+        <button id="saveRegenBtn" style="background: #28a745;">Save & Regenerate</button>
+        <button id="cancelEditBtn" style="background: #6c757d;">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Analysis Results (Hidden by default) -->
+    <div id="analysisResults"
+      style="display: none; margin-top: 15px; border: 1px solid #ddd; border-radius: 6px; padding: 10px; background: #fff;">
+      <h3 style="margin: 0 0 10px 0; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 5px;">ATS Analysis
+      </h3>
+
+      <div style="display: flex; align-items: center; margin-bottom: 10px;">
+        <div style="font-size: 24px; font-weight: bold; color: #4A00E0; margin-right: 10px;" id="atsScore">--</div>
+        <div style="font-size: 12px; color: #666;">/ 100 Match Score</div>
+      </div>
+
+      <div id="analysisDetails" style="font-size: 12px; line-height: 1.4;">
+        <!-- Dynamic content here -->
+      </div>
     </div>
 
     <div id="error" class="error"></div>
@@ -172,6 +202,78 @@
   <div class="tip">
     <strong>Note:</strong> Ensure local server is running on port 8000.
   </div>
+
+  <style>
+    /* Field Styles */
+    .edit-field {
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px dashed #eee;
+    }
+
+    .edit-field label {
+      display: block;
+      font-size: 11px;
+      font-weight: bold;
+      color: #555;
+      margin-bottom: 3px;
+    }
+
+    .edit-field input,
+    .edit-field textarea {
+      width: 100%;
+      padding: 5px;
+      font-size: 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+
+    .edit-field textarea {
+      resize: vertical;
+      min-height: 40px;
+    }
+
+    /* Nested Styles */
+    .item-block {
+      background: #f8f9fa;
+      padding: 8px;
+      margin-bottom: 8px;
+      border-radius: 4px;
+      border: 1px solid #e9ecef;
+    }
+
+    .item-header {
+      font-size: 12px;
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #007bff;
+    }
+
+    .bullet-list {
+      margin-top: 5px;
+      padding-left: 0;
+      list-style: none;
+    }
+
+    .bullet-item {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 3px;
+    }
+
+    .bullet-input {
+      flex: 1;
+    }
+
+    .remove-btn {
+      color: #dc3545;
+      font-size: 10px;
+      cursor: pointer;
+      border: none;
+      background: none;
+    }
+  </style>
 
   <script src="popup.js"></script>
 </body>

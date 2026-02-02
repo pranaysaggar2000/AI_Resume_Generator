@@ -344,5 +344,406 @@ document.addEventListener('DOMContentLoaded', function () {
             askBtn.textContent = 'Ask Question';
         }
     });
+
+    // --- ADVANCED EDITOR LOGIC ---
+    const editBtn = document.getElementById('editBtn');
+    const editorUI = document.getElementById('editorUI');
+    const sectionSelect = document.getElementById('sectionSelect');
+    const formContainer = document.getElementById('formContainer');
+    const saveRegenBtn = document.getElementById('saveRegenBtn');
+    const cancelEditBtn = document.getElementById('cancelEditBtn');
+
+    let currentEditingData = null; // Local copy for editing
+    let previousSection = null; // Track previous section for auto-saving
+
+    editBtn.addEventListener('click', async () => {
+        // Load data if not already loaded
+        if (!currentEditingData) {
+            const result = await chrome.storage.local.get(['lastResumeData']);
+            if (result.lastResumeData) {
+                currentEditingData = JSON.parse(JSON.stringify(result.lastResumeData)); // Deep copy
+            } else {
+                alert("No resume data found to edit.");
+                return;
+            }
+        }
+
+        // Show Editor
+        editorUI.style.display = 'block';
+        actionsDiv.style.display = 'none'; // Hide actions while editing
+
+        // Trigger initial population
+        sectionSelect.dispatchEvent(new Event('change'));
+
+        // Also Initialize Tracker on Open
+        // We need to re-fetch the pointer to currentEditingData or similar
+        // But simpler: just set the tracker when the dropdown change event fires or here
+
+        // Wait for data load (the original handler does this)
+        setTimeout(() => {
+            previousSection = sectionSelect.value;
+        }, 100);
+    });
+
+    cancelEditBtn.addEventListener('click', () => {
+        editorUI.style.display = 'none';
+        actionsDiv.style.display = 'block';
+    });
+
+    // Helper: Render Inputs based on Section
+    function renderEditor(section, data) {
+        if (!formContainer) return;
+        formContainer.innerHTML = ''; // Clear
+
+        // 1. SUMMARY
+        if (section === 'summary') {
+            const div = document.createElement('div');
+            div.className = 'edit-field';
+            div.innerHTML = `<label>Summary Text</label>
+                             <textarea id="edit_summary_text" style="height: 100px;">${data || ''}</textarea>`;
+            formContainer.appendChild(div);
+
+            // 2. CONTACT INFO
+        } else if (section === 'contact') {
+            // Handle raw string case just in case
+            if (typeof data !== 'object') data = { location: data || "" };
+
+            // Match keys expected by resume_builder.py
+            const fields = [
+                { key: 'location', label: 'Location' },
+                { key: 'email', label: 'Email' },
+                { key: 'phone', label: 'Phone' },
+                { key: 'linkedin_url', label: 'LinkedIn URL' },
+                { key: 'portfolio_url', label: 'Portfolio URL' },
+                { key: 'github', label: 'GitHub' }
+            ];
+
+            fields.forEach(f => {
+                // Try strict key match first, then fallback to partial (e.g. 'linkedin' for 'linkedin_url')
+                let val = data[f.key];
+                if (!val && f.key === 'linkedin_url') val = data['linkedin'];
+                if (!val && f.key === 'portfolio_url') val = data['portfolio'];
+
+                val = val || '';
+
+                const div = document.createElement('div');
+                div.className = 'edit-field';
+                div.innerHTML = `<label>${f.label}</label>
+                                  <input type="text" data-key="${f.key}" class="contact-input" value="${val}" placeholder="${f.label}">`;
+                formContainer.appendChild(div);
+            });
+
+            // 3. SKILLS
+        } else if (section === 'skills') {
+            // Data is dict: { Category: "skill, skill", ... }
+            if (!data) data = {};
+
+            // Container for categories
+            const listDiv = document.createElement('div');
+            listDiv.id = 'skillsList';
+
+            for (const [category, skills] of Object.entries(data)) {
+                const div = document.createElement('div');
+                div.className = 'item-block';
+                div.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <input type="text" class="skill-category-input" value="${category}" style="font-weight: bold; width: 60%;" placeholder="Category Name">
+                        <button class="remove-btn remove-category-btn">🗑️ Remove</button>
+                    </div>
+                    <textarea class="skill-values-input" style="height: 60px;">${skills}</textarea>
+                 `;
+                listDiv.appendChild(div);
+            }
+            formContainer.appendChild(listDiv);
+
+            // Add Category Button
+            const addBtn = document.createElement('button');
+            addBtn.textContent = "➕ Add Skill Category";
+            addBtn.style.cssText = "width: 100%; padding: 8px; background: #e9ecef; border: 1px dashed #ccc; color: #333; cursor: pointer; margin-top: 10px;";
+            addBtn.onclick = () => {
+                const div = document.createElement('div');
+                div.className = 'item-block';
+                div.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <input type="text" class="skill-category-input" value="New Category" style="font-weight: bold; width: 60%;">
+                        <button class="remove-btn remove-category-btn">🗑️ Remove</button>
+                    </div>
+                    <textarea class="skill-values-input" style="height: 60px;"></textarea>
+                `;
+                listDiv.appendChild(div);
+            };
+            formContainer.appendChild(addBtn);
+
+            // Delegate events for removal
+            formContainer.addEventListener('click', (e) => {
+                if (e.target.classList.contains('remove-category-btn')) {
+                    e.target.closest('.item-block').remove();
+                }
+            });
+
+            // 4. EXPERIENCE & PROJECTS
+        } else if (section === 'experience' || section === 'projects') {
+            // Data is List of Objects
+            if (!data) data = [];
+
+            const listDiv = document.createElement('div');
+            listDiv.id = 'itemsList';
+
+            data.forEach((item, index) => {
+                renderItemBlock(listDiv, item, section);
+            });
+            formContainer.appendChild(listDiv);
+
+            // Add Item Button
+            const addBtn = document.createElement('button');
+            addBtn.textContent = `➕ Add ${section === 'experience' ? 'Job' : 'Project'}`;
+            addBtn.style.cssText = "width: 100%; padding: 8px; background: #e9ecef; border: 1px dashed #ccc; color: #333; cursor: pointer; margin-top: 10px;";
+
+            addBtn.onclick = () => {
+                // Template for new item - ENSURE 'dates' IS PRESENT
+                const newItem = section === 'experience'
+                    ? { company: "New Company", role: "Role", dates: "Present", bullets: ["New bullet"] }
+                    : { name: "New Project", tech: "Tech Stack", dates: "2024", bullets: ["New bullet"] };
+                renderItemBlock(listDiv, newItem, section);
+            };
+            formContainer.appendChild(addBtn);
+        } else {
+            // Fallback
+            const div = document.createElement('div');
+            div.className = 'edit-field';
+            div.innerHTML = `<label>Raw JSON</label>
+                              <textarea id="edit_raw_json" style="height: 100px;">${JSON.stringify(data, null, 2)}</textarea>`;
+            formContainer.appendChild(div);
+        }
+    }
+
+    // Helper: Render a single item block (Experience/Project)
+    function renderItemBlock(container, item, section) {
+        const div = document.createElement('div');
+        div.className = 'item-block';
+
+        // Header Fields
+        let headerHtml = '';
+        if (section === 'experience') {
+            // Fix: Check role OR title
+            const roleVal = item.role || item.title || "";
+            const dateVal = item.dates || item.date || "";
+            const locVal = item.location || "";
+
+            headerHtml = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 5px;">
+                    <input type="text" class="item-company" value="${item.company || ''}" placeholder="Company">
+                    <input type="text" class="item-role" value="${roleVal}" placeholder="Role">
+                    <input type="text" class="item-location" value="${locVal}" placeholder="Location (e.g. New York, NY)">
+                    <input type="text" class="item-dates" value="${dateVal}" placeholder="Dates" style="text-align: right;">
+                </div>`;
+        } else {
+            const dateVal = item.dates || item.date || "";
+            headerHtml = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 5px;">
+                    <input type="text" class="item-name" value="${item.name || ''}" placeholder="Project Name">
+                    <input type="text" class="item-tech" value="${item.tech || ''}" placeholder="Technologies">
+                    <input type="text" class="item-dates" value="${dateVal}" placeholder="Dates" style="grid-column: span 2;">
+                </div>`;
+        }
+
+        // Bullets
+        let bulletsHtml = '';
+        if (item.bullets && Array.isArray(item.bullets)) {
+            item.bullets.forEach(b => {
+                bulletsHtml += createBulletRow(b);
+            });
+        }
+
+        div.innerHTML = `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <span style="font-weight: bold; color: #555;">${section === 'experience' ? 'Job' : 'Project'}</span>
+                <button class="remove-btn remove-item-btn">🗑️ Remove Item</button>
+            </div>
+            ${headerHtml}
+            <div class="edit-field">
+                <label>Bullets</label>
+                <div class="bullet-list-container">${bulletsHtml}</div>
+                <button class="add-bullet-btn" style="font-size: 10px; padding: 2px 5px; margin-top: 5px;">+ Add Bullet</button>
+            </div>
+        `;
+
+        // Bind Events only for this block
+        div.querySelector('.remove-item-btn').onclick = () => div.remove();
+
+        const bulletContainer = div.querySelector('.bullet-list-container');
+        div.querySelector('.add-bullet-btn').onclick = () => {
+            bulletContainer.insertAdjacentHTML('beforeend', createBulletRow(""));
+        };
+
+        // Delegate bullet removal within this block
+        bulletContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('remove-bullet-btn')) {
+                e.target.closest('.bullet-item').remove();
+            }
+        });
+
+        container.appendChild(div);
+    }
+
+    function createBulletRow(text) {
+        const safeText = text ? text.replace(/"/g, '&quot;') : '';
+        // Use Grid to force width: 1fr for textarea
+        return `<div class="bullet-item" style="display: grid; grid-template-columns: 1fr auto; gap: 5px; margin-bottom: 5px; width: 100%;">
+                    <textarea class="bullet-input" style="width: 100%; height: 50px; resize: vertical; padding: 5px; font-family: inherit; box-sizing: border-box;">${safeText}</textarea>
+                    <button class="remove-btn remove-bullet-btn" style="margin-top: 5px;">❌</button>
+                </div>`;
+    }
+
+    // Helper: Extract Data from Inputs
+    function parseEditor(section) {
+        if (!formContainer) return null; // Safety check
+
+        if (section === 'summary') {
+            const el = document.getElementById('edit_summary_text');
+            return el ? el.value : '';
+
+        } else if (section === 'contact') {
+            const inputs = formContainer.querySelectorAll('.contact-input');
+            const contactData = {};
+            inputs.forEach(input => {
+                const key = input.dataset.key;
+                if (input.value.trim()) {
+                    contactData[key] = input.value.trim();
+                }
+            });
+            return contactData;
+
+        } else if (section === 'skills') {
+            const blocks = formContainer.querySelectorAll('.item-block');
+            const newSkills = {};
+            blocks.forEach(block => {
+                const catInput = block.querySelector('.skill-category-input');
+                const valInput = block.querySelector('.skill-values-input');
+                if (catInput && valInput) {
+                    newSkills[catInput.value] = valInput.value;
+                }
+            });
+            return newSkills;
+
+        } else if (section === 'experience' || section === 'projects') {
+            const blocks = formContainer.querySelectorAll('.item-block');
+            const newList = [];
+
+            blocks.forEach(block => {
+                // Get Headers
+                let item = {};
+
+                // Safely get values
+                const getVal = (sel) => {
+                    const el = block.querySelector(sel);
+                    return el ? el.value : "";
+                };
+
+                if (section === 'experience') {
+                    item.company = getVal('.item-company');
+                    item.role = getVal('.item-role');
+                    item.dates = getVal('.item-dates');
+                    item.location = getVal('.item-location'); // Added Location
+                } else {
+                    item.name = getVal('.item-name');
+                    item.tech = getVal('.item-tech');
+                    item.dates = getVal('.item-dates');
+                }
+
+                // Get Bullets
+                const bulletInputs = block.querySelectorAll('.bullet-input');
+                item.bullets = Array.from(bulletInputs).map(b => b.value).filter(t => t.trim().length > 0);
+
+                newList.push(item);
+            });
+            return newList;
+
+        } else {
+            // Fallback
+            try {
+                const raw = document.getElementById('edit_raw_json');
+                return raw ? JSON.parse(raw.value) : currentEditingData[section];
+            } catch (e) { return currentEditingData[section]; }
+        }
+    }
+
+    sectionSelect.addEventListener('change', () => {
+        if (!currentEditingData) return;
+
+        // AUTO-SAVE PREVIOUS SECTION
+        if (previousSection) {
+            const savedData = parseEditor(previousSection);
+            // Verify not-null to avoid overwriting with empty if parse failed
+            if (savedData !== null) {
+                currentEditingData[previousSection] = savedData;
+            }
+        }
+
+        const section = sectionSelect.value;
+        renderEditor(section, currentEditingData[section]);
+
+        // Update tracker
+        previousSection = section;
+    });
+
+    saveRegenBtn.addEventListener('click', async () => {
+        if (!currentEditingData) return;
+
+        // Save CURRENT section explicitly before regenerating
+        const section = sectionSelect.value;
+        const currentData = parseEditor(section);
+        if (currentData !== null) {
+            currentEditingData[section] = currentData;
+        }
+
+        try {
+            // Regenerate
+            saveRegenBtn.disabled = true;
+            saveRegenBtn.textContent = "Regenerating...";
+            statusDiv.textContent = "Regenerating PDF...";
+
+            const response = await fetch('http://localhost:8000/regenerate_pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    resume_data: currentEditingData,
+                    company_name: "Manual_Edit_" + Date.now()
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error("Regeneration failed: " + response.statusText);
+            }
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                // Update global state
+                currentViewUrl = data.view_url;
+
+                // Save new state
+                chrome.storage.local.set({
+                    lastViewUrl: currentViewUrl,
+                    lastResumeData: currentEditingData, // Save our edits
+                    lastStatus: "Resume manually updated."
+                });
+
+                statusDiv.textContent = "Resume updated successfully!";
+                actionsDiv.style.display = 'block';
+                editorUI.style.display = 'none';
+
+                // Open new PDF
+                chrome.tabs.create({ url: currentViewUrl });
+            }
+
+        } catch (e) {
+            console.error(e);
+            alert("Error: " + e.message);
+        } finally {
+            saveRegenBtn.disabled = false;
+            saveRegenBtn.textContent = "Save & Regenerate";
+        }
+    });
 });
 

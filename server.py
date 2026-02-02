@@ -144,6 +144,42 @@ def profile_status():
             return jsonify({"exists": False})
     return jsonify({"exists": False})
 
+@app.route('/regenerate_pdf', methods=['POST'])
+def regenerate_pdf():
+    """Regenerate PDF with manually edited data."""
+    try:
+        data = request.json
+        if not data or 'resume_data' not in data:
+            return jsonify({"error": "Missing resume_data"}), 400
+            
+        resume_data = data['resume_data']
+        # optional: allow overriding filename or company
+        filename = data.get('filename', 'Regenerated_Resume.pdf')
+        company_name = data.get('company_name', 'Manual_Edit')
+        
+        # Create Directory Structure
+        company_dir = os.path.join(RESUME_DIR, company_name)
+        os.makedirs(company_dir, exist_ok=True)
+        
+        output_path = os.path.join(company_dir, filename)
+        
+        print(f"Regenerating PDF for {company_name} at {output_path}...")
+        create_resume_pdf(resume_data, output_path)
+        
+        # Return new URL
+        view_url = f"http://localhost:8000/view/{company_name}/{filename}"
+        
+        return jsonify({
+            "status": "success",
+            "view_url": view_url,
+            "filename": filename
+        })
+        
+    except Exception as e:
+        print(f"Error regenerating PDF: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/upload_resume', methods=['POST'])
 def upload_resume_endpoint():
     """Handle resume upload from extension."""
