@@ -183,12 +183,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 actionsDiv.style.display = 'block';
                 savePathSpan.textContent = `generated_resumes/${companyName}/...`;
 
-                // Save State
+                // Store data for analysis
                 chrome.storage.local.set({
                     lastViewUrl: currentViewUrl,
                     lastStatus: 'Resume generated successfully!',
-                    lastCompany: companyName
+                    lastCompany: companyName,
+                    lastResumeData: data.resume_data,
+                    lastJdText: jdText
                 });
+
             } else {
                 throw new Error("Invalid server response");
             }
@@ -202,6 +205,79 @@ document.addEventListener('DOMContentLoaded', function () {
             generateBtn.disabled = false;
         }
     });
+
+    // Analyze Handler
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const analysisResults = document.getElementById('analysisResults');
+    const atsScoreDiv = document.getElementById('atsScore');
+    const analysisDetailsDiv = document.getElementById('analysisDetails');
+
+    analyzeBtn.addEventListener('click', async () => {
+        analyzeBtn.disabled = true;
+        analyzeBtn.textContent = "Analyzing...";
+        analysisResults.style.display = 'none';
+
+        try {
+            // Retrieve stored data
+            const result = await chrome.storage.local.get(['lastResumeData', 'lastJdText']);
+            if (!result.lastResumeData || !result.lastJdText) {
+                throw new Error("Missing resume data. Please regenerate the resume first.");
+            }
+
+            const response = await fetch('http://localhost:8000/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    resume_data: result.lastResumeData,
+                    jd_text: result.lastJdText
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error("Analysis failed: " + response.statusText);
+            }
+
+            const analysis = await response.json();
+
+            if (analysis.error) {
+                throw new Error(analysis.error);
+            }
+
+            // Render Results
+            atsScoreDiv.textContent = analysis.score || "N/A";
+
+            let html = "";
+
+            if (analysis.missing_keywords && analysis.missing_keywords.length > 0) {
+                html += `<div style="margin-bottom: 8px;"><strong>⚠️ Missing Keywords:</strong><br>
+                <span style="color: #d63384;">${analysis.missing_keywords.join(', ')}</span></div>`;
+            }
+
+            if (analysis.matching_areas && analysis.matching_areas.length > 0) {
+                html += `<div style="margin-bottom: 8px;"><strong>✅ Strong Matches:</strong><br>
+                 <span style="color: #198754;">${analysis.matching_areas.join(', ')}</span></div>`;
+            }
+
+            if (analysis.recommendations && analysis.recommendations.length > 0) {
+                html += `<div><strong>💡 Recommendations:</strong>
+                <ul style="margin: 5px 0; padding-left: 15px;">
+                    ${analysis.recommendations.map(r => `<li>${r}</li>`).join('')}
+                </ul></div>`;
+            }
+
+            analysisDetailsDiv.innerHTML = html;
+            analysisResults.style.display = 'block';
+
+
+        } catch (err) {
+            console.error(err);
+            alert("Analysis Error: " + err.message);
+        } finally {
+            analyzeBtn.disabled = false;
+            analyzeBtn.textContent = "📊 Analyze ATS Score";
+        }
+    });
+
     // Smart Q&A Handler
     const askBtn = document.getElementById('askBtn');
     const questionInput = document.getElementById('questionInput');
@@ -269,3 +345,4 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 });
+

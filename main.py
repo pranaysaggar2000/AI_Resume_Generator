@@ -84,7 +84,7 @@ def query_openrouter(prompt: str, model_name: str = "arcee-ai/trinity-large-prev
         print(f"⚠️ OpenRouter Connection Error: {e}")
         return ""
 
-def query_groq(prompt: str) -> str:
+def query_groq(prompt: str, expect_json: bool = False) -> str:
     """
     Query Groq API with robust fallback chain.
     Chain: Llama 3.3 70B (Quality) -> Llama 3.1 8B (Speed/Volume) -> Qwen 32B (Backup)
@@ -103,18 +103,25 @@ def query_groq(prompt: str) -> str:
     for model_id in models_chain:
         try:
             print(f"   ⚡ Groq: Attempting with {model_id}...")
+            
+            payload = {
+                "model": model_id,
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ]
+            }
+            
+            # Enforce JSON mode if requested
+            if expect_json:
+                payload["response_format"] = {"type": "json_object"}
+            
             response = requests.post(
                 url="https://api.groq.com/openai/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json"
                 },
-                json={
-                    "model": model_id,
-                    "messages": [
-                        {"role": "user", "content": prompt}
-                    ]
-                },
+                json=payload,
                 timeout=60 # Fast inference
             )
             
@@ -125,6 +132,20 @@ def query_groq(prompt: str) -> str:
             elif response.status_code == 429:
                 print(f"   ⚠️ Groq Rate Limit ({model_id}): Switching to fallback...")
                 continue # Try next model
+            elif response.status_code == 400 and expect_json:
+                 # Some models might not support json_object type or require "json" in prompt (which we usually have)
+                 print(f"   ⚠️ Groq JSON Mode Error ({model_id}): Retrying without force-json...")
+                 payload.pop("response_format", None)
+                 # Retry without forced json mode
+                 retry_resp = requests.post(
+                    url="https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}","Content-Type": "application/json"},
+                    json=payload, timeout=60
+                 )
+                 if retry_resp.status_code == 200:
+                     return retry_resp.json().get('choices', [{}])[0].get('message', {}).get('content', '')
+                 else:
+                     continue
             else:
                 print(f"   ⚠️ Groq Error ({model_id}): {response.status_code} - {response.text}")
                 continue # Try next model
@@ -135,7 +156,7 @@ def query_groq(prompt: str) -> str:
             
     return "" # All failed
 
-def query_provider(prompt: str, provider: str = "gemini") -> str:
+def query_provider(prompt: str, provider: str = "gemini", expect_json: bool = False) -> str:
     """Query the specified AI provider."""
     if provider == "ollama":
         print("   Using Ollama (Local)...")
@@ -144,27 +165,120 @@ def query_provider(prompt: str, provider: str = "gemini") -> str:
         print("   Using OpenRouter (Cloud)...")
         return query_openrouter(prompt)
     elif provider == "groq":
-        return query_groq(prompt)
+        return query_groq(prompt, expect_json=expect_json)
     else:  # Default to gemini
         print("   Using Gemini (Cloud)...")
+        # Use specific model if requested, otherwise default to flash
+        model_name = "gemini-2.5-flash"
+        if "gemini-3" in prompt.lower() or "analyze" in prompt.lower():
+             pass
+
         try:
-            response = model.generate_content(prompt)
+            # Check if we should use the Pro model for analysis
+            if "ATS scoring" in prompt or "Analyze this resume" in prompt:
+                 analysis_model = genai.GenerativeModel("gemini-3-pro-preview")
+                 # Force JSON output
+                 response = analysis_model.generate_content(
+                     prompt, 
+                     generation_config={"response_mime_type": "application/json"}
+                 )
+            else:
+                 response = model.generate_content(prompt)
+                 
             return response.text
         except Exception as e:
             # Fallback mechanism
+            print(f"   ⚠️ Gemini Error: {e}")
+            
+            # If Gemini 3 fails, try Groq
+            if "gemini-3" in str(e).lower() or "not found" in str(e).lower() or "404" in str(e) or "400" in str(e) or "429" in str(e) or "quota" in str(e).lower():
+                 print("   🔄 Switching to Groq for analysis (JSON Mode)...")
+                 return query_groq(prompt, expect_json=True)
+
             error_msg = str(e).lower()
             if "429" in error_msg or "resource exhausted" in error_msg or "quota" in error_msg or "500" in error_msg or "internal" in error_msg:
-                print(f"   ⚠️ Gemini Error: {e}")
                 print("   🔄 Switching to Fallback Config: Gemma 3 27B Instruct...")
                 try:
                     fallback_model = genai.GenerativeModel("gemma-3-27b-it")
-                    response = fallback_model.generate_content(prompt)
+                    if expect_json:
+                        response = fallback_model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
+                    else:
+                        response = fallback_model.generate_content(prompt)
                     return response.text
                 except Exception as fallback_e:
                     print(f"   ❌ Fallback Failed: {fallback_e}")
-                    raise e # Re-raise original error if fallback also fails
+                    # Try Groq as last resort
+                    print("   🔄 Switching to Groq...")
+                    return query_groq(prompt, expect_json=expect_json)
             else:
-                raise e
+                # Try Groq before giving up
+                return query_groq(prompt, expect_json=expect_json)
+
+
+def analyze_resume_with_jd(resume_data: dict, jd_text: str) -> dict:
+    """
+    Analyze the resume against the JD using Gemini 3 Pro Preview (or Groq fallback).
+    Returns a dict with score and feedback.
+    """
+    prompt = f"""
+    Analyze this resume against the job description and provide a strict ATS analysis.
+    
+    JOB DESCRIPTION:
+    {jd_text}
+    
+    RESUME:
+    {json.dumps(resume_data, indent=2)}
+    
+    TASK:
+    1. Calculate a match score (0-100).
+    2. Identify 3-5 specific missing keywords.
+    3. Identify 3 strong matching areas.
+    4. Provide 3 specific recommendations to improve the score.
+    
+    OUTPUT FORMAT (JSON ONLY):
+    {{
+      "score": 85,
+      "missing_keywords": ["keyword1", "keyword2"],
+      "matching_areas": ["area1", "area2"],
+      "recommendations": ["rec1", "rec2"],
+      "summary_feedback": "Brief summary of the fit."
+    }}
+    """
+    
+    try:
+        # We explicitly want to use the high-end model for this
+        print("   🧠 Analyzing with Gemini 3 Pro Preview...")
+        
+        response_text = query_provider(prompt, provider="gemini")
+        print(f"DEBUG: Raw Analysis Response: {response_text}")
+        
+        # internal helper to clean json
+        def clean_json_string(s):
+            # If wrapped in markdown code blocks, strip them
+            match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', s)
+            if match:
+                return match.group(1)
+            # Otherwise try to find the first { and last }
+            match = re.search(r'\{[\s\S]*\}', s)
+            if match:
+                return match.group(0)
+            return s
+
+        cleaned_text = clean_json_string(response_text)
+        
+        try:
+            return json.loads(cleaned_text)
+        except json.JSONDecodeError:
+             # Last ditch effort: fix trailing commas or common issues?
+             # For now, just return error
+             print("   ❌ JSON Decode Error on cleaned text")
+             pass
+
+        return {"error": "Could not parse analysis results. See server logs for raw output."}
+            
+    except Exception as e:
+        print(f"Error in analysis: {e}")
+        return {"error": str(e)}
 
 
 def extract_text_from_pdf(file_stream) -> str:
@@ -600,7 +714,8 @@ CRITICAL OBJECTIVE: Rewrite the resume to MAXIMIZE ATS keyword matching while ma
 
 2. **Summary** (Target: 2-3 full sentences, ~35-45 words):
    - Start with the exact Job Title from the JD.
-   - Synthesize the candidate's years of experience with the **top 4 relevant skills**.
+   - Synthesize the candidate's **ACTUAL** years of experience (calculate strictly from the provided 'experience' section) with the **top 4 relevant skills**.
+   - **CRITICAL:** DO NOT HALLUCINATE YEARS OF EXPERIENCE to match the JD. If the candidate has 2 years, state "2+ years" or "Experienced", NEVER "5+" unless supported by data.
    - Craft a cohesive, professional narrative (avoid fragmented or overly brief sentences).
    - Aim to fill ~2-3 lines to maximize impact without overflowing.
    - End with a period
@@ -621,7 +736,7 @@ CRITICAL OBJECTIVE: Rewrite the resume to MAXIMIZE ATS keyword matching while ma
    - Full-time roles: Generate EXACTLY 4 bullet points. Do not generate more.
    - Intern roles: Generate EXACTLY 3 bullet points. Do not generate more.
    - **CRITICAL: DO NOT SUMMARIZE OR SHORTEN.** Maintain the full depth and detail of the original bullets.
-   - Each bullet should be SUBSTANTIVE (aim for ~2 lines per bullet).
+   - Each bullet should be SUBSTANTIVE (aim for 1-2 lines per bullet).
    - Integrate JD keywords ONLY where they fit naturally. Do not force them.
    - PRESERVE all metrics exactly (18%, 60%, 99.5%, 40%, 30%, 92.27%, 2000, 5+)
    - **METRICS PRIORITY:** Emphasize system performance (throughput, latency, concurrency) over simple volume (user counts) where possible.

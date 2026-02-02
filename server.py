@@ -3,7 +3,7 @@ import re
 from urllib.parse import urlparse
 from flask import Flask, request, send_file, jsonify, send_from_directory
 from flask_cors import CORS
-from main import get_base_resume, parse_job_description, tailor_resume, generate_answer, extract_text_from_pdf, extract_base_resume_info
+from main import get_base_resume, parse_job_description, tailor_resume, generate_answer, extract_text_from_pdf, extract_base_resume_info, analyze_resume_with_jd
 import json
 
 
@@ -99,11 +99,32 @@ def generate_resume():
         return jsonify({
             "status": "success",
             "view_url": view_url,
-            "filename": filename
+            "filename": filename,
+            "resume_data": tailored_resume # Use this for analysis
         })
 
     except Exception as e:
         print(f"Error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/analyze', methods=['POST'])
+def analyze_resume_endpoint():
+    """Analyze the resume against JD."""
+    try:
+        data = request.json
+        if not data or 'resume_data' not in data or 'jd_text' not in data:
+            return jsonify({"error": "Missing resume_data or jd_text"}), 400
+            
+        resume_data = data['resume_data']
+        jd_text = data['jd_text']
+        
+        # Call the analysis function
+        analysis = analyze_resume_with_jd(resume_data, jd_text)
+        
+        return jsonify(analysis)
+        
+    except Exception as e:
+        print(f"Error analyzing resume: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/health', methods=['GET'])
