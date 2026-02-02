@@ -481,8 +481,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             });
 
-            // 4. EXPERIENCE & PROJECTS
-        } else if (section === 'experience' || section === 'projects') {
+            // 4. EXPERIENCE, PROJECTS & LEADERSHIP
+        } else if (section === 'experience' || section === 'projects' || section === 'leadership') {
             // Data is List of Objects
             if (!data) data = [];
 
@@ -495,15 +495,25 @@ document.addEventListener('DOMContentLoaded', function () {
             formContainer.appendChild(listDiv);
 
             // Add Item Button
+            let btnLabel = 'Item';
+            if (section === 'experience') btnLabel = 'Job';
+            if (section === 'projects') btnLabel = 'Project';
+            if (section === 'leadership') btnLabel = 'Role';
+
             const addBtn = document.createElement('button');
-            addBtn.textContent = `➕ Add ${section === 'experience' ? 'Job' : 'Project'}`;
+            addBtn.textContent = `➕ Add ${btnLabel}`;
             addBtn.style.cssText = "width: 100%; padding: 8px; background: #e9ecef; border: 1px dashed #ccc; color: #333; cursor: pointer; margin-top: 10px;";
 
             addBtn.onclick = () => {
-                // Template for new item - ENSURE 'dates' IS PRESENT
-                const newItem = section === 'experience'
-                    ? { company: "New Company", role: "Role", dates: "Present", bullets: ["New bullet"] }
-                    : { name: "New Project", tech: "Tech Stack", dates: "2024", bullets: ["New bullet"] };
+                // Template for new item
+                let newItem = { bullets: ["New bullet"] };
+                if (section === 'experience') {
+                    newItem = { company: "New Company", role: "Role", location: "Location", dates: "Present", bullets: ["New bullet"] };
+                } else if (section === 'projects') {
+                    newItem = { name: "New Project", tech: "Tech Stack", dates: "2024", bullets: ["New bullet"] };
+                } else if (section === 'leadership') {
+                    newItem = { organization: "Organization", role: "Role", location: "Location", dates: "Dates", bullets: ["New bullet"] };
+                }
                 renderItemBlock(listDiv, newItem, section);
             };
             formContainer.appendChild(addBtn);
@@ -517,10 +527,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    // Helper: Render a single item block (Experience/Project)
+    // Helper: Render a single item block (Experience/Project/Leadership)
     function renderItemBlock(container, item, section) {
         const div = document.createElement('div');
         div.className = 'item-block';
+
+        let label = 'Item';
+        if (section === 'experience') label = 'Job';
+        if (section === 'projects') label = 'Project';
+        if (section === 'leadership') label = 'Leadership';
 
         // Header Fields
         let headerHtml = '';
@@ -537,6 +552,24 @@ document.addEventListener('DOMContentLoaded', function () {
                     <input type="text" class="item-location" value="${locVal}" placeholder="Location (e.g. New York, NY)">
                     <input type="text" class="item-dates" value="${dateVal}" placeholder="Dates" style="text-align: right;">
                 </div>`;
+        } else if (section === 'leadership') {
+            const orgVal = item.organization || "";
+            const roleVal = item.role || ""; // Resume builder uses 'role' (line 127) or 'title' (line 376)? 
+            // resume_builder.py uses `lead.get('role', ...)` for BoldEntry and `lead.get('organization')` for Italic.
+            // Line 376 (adapter): `create_aligned_row(lead['organization']... lead['title']...)`.
+            // There seems to be a discrepancy in resume_builder.py itself between generate_resume (uses role) and create_resume_pdf (uses title in adapter?).
+            // Let's use 'role' and 'organization' as primary keys.
+            const dateVal = item.dates || "";
+            const locVal = item.location || "";
+
+            headerHtml = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 5px;">
+                    <input type="text" class="item-org" value="${orgVal}" placeholder="Organization">
+                    <input type="text" class="item-role" value="${roleVal}" placeholder="Role">
+                    <input type="text" class="item-location" value="${locVal}" placeholder="Location">
+                    <input type="text" class="item-dates" value="${dateVal}" placeholder="Dates" style="text-align: right;">
+                </div>`;
+
         } else {
             const dateVal = item.dates || item.date || "";
             headerHtml = `
@@ -557,7 +590,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         div.innerHTML = `
             <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                <span style="font-weight: bold; color: #555;">${section === 'experience' ? 'Job' : 'Project'}</span>
+                <span style="font-weight: bold; color: #555;">${label}</span>
                 <button class="remove-btn remove-item-btn">🗑️ Remove Item</button>
             </div>
             ${headerHtml}
@@ -626,7 +659,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             return newSkills;
 
-        } else if (section === 'experience' || section === 'projects') {
+        } else if (section === 'experience' || section === 'projects' || section === 'leadership') {
             const blocks = formContainer.querySelectorAll('.item-block');
             const newList = [];
 
@@ -645,6 +678,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     item.role = getVal('.item-role');
                     item.dates = getVal('.item-dates');
                     item.location = getVal('.item-location'); // Added Location
+                } else if (section === 'leadership') {
+                    item.organization = getVal('.item-org');
+                    item.role = getVal('.item-role');
+                    item.dates = getVal('.item-dates');
+                    item.location = getVal('.item-location');
                 } else {
                     item.name = getVal('.item-name');
                     item.tech = getVal('.item-tech');
@@ -703,12 +741,17 @@ document.addEventListener('DOMContentLoaded', function () {
             saveRegenBtn.textContent = "Regenerating...";
             statusDiv.textContent = "Regenerating PDF...";
 
+            // Get original company name for OVERWRITE
+            const result = await chrome.storage.local.get(['lastCompany']);
+            const companyName = result.lastCompany || "Manual_Edit";
+
             const response = await fetch('http://localhost:8000/regenerate_pdf', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     resume_data: currentEditingData,
-                    company_name: "Manual_Edit_" + Date.now()
+                    company_name: companyName, // Use original company folder
+                    filename: 'Pranay_Saggar_Resume.pdf' // Overwrite standard file
                 })
             });
 
@@ -722,11 +765,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 // Update global state
                 currentViewUrl = data.view_url;
 
-                // Save new state
+                // Save new state (REPLACE AI generated state)
                 chrome.storage.local.set({
                     lastViewUrl: currentViewUrl,
-                    lastResumeData: currentEditingData, // Save our edits
-                    lastStatus: "Resume manually updated."
+                    lastResumeData: currentEditingData, // Update stored data to the edited version
+                    lastStatus: "Resume updated."
                 });
 
                 statusDiv.textContent = "Resume updated successfully!";

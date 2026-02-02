@@ -87,7 +87,7 @@ def generate_resume():
         # 4. Generate PDF
         print(f"Generating PDF for {company_name}...")
         safe_name = base_resume.get('name', 'Resume').replace(" ", "_")
-        filename = f"{safe_name}.pdf"
+        filename = f"{safe_name}_Resume.pdf"
         output_path = os.path.join(company_dir, filename)
             
         create_resume_pdf(tailored_resume, output_path)

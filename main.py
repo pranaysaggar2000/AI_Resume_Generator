@@ -825,7 +825,7 @@ Provide a concise, direct answer or talking point that the candidate can use.
 - If the question is "Tell me about yourself", craft a short pitch relevant to this specific JD.
 - If the question is technical, explain how they have used that technology based on their projects/work.
 - Keep the tone professional and confident.
-- Format with short paragraphs or bullet points for readability.
+- Answer in PLAIN TEXT only. Do NOT use markdown, bolding, italics, bullet points, or headers.
 """
     try:
         return query_provider(prompt, provider)
