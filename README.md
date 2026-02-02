@@ -5,18 +5,27 @@ An advanced, AI-powered tool that generates ATS-optimized resumes tailored to sp
 ## ✨ Key Features
 
 -   **🎯 ATS Optimization**: Automatically tailors your resume keywords, summary, and bullet points to match the Job Description (JD) using advanced AI analysis.
+-   **✏️ Advanced Manual Editor**: Full-featured form-based editor in the Chrome Extension.
+    -   **Dynamic Editing**: Add/Remove Skill Categories, Experience Items, and Bullet Points.
+    -   **Auto-Save**: Never lose your progress; changes persist between tab switches.
+    -   **Contact Management**: Edit Location, Links, and contact details easily.
+    -   **Live Regeneration**: Update the PDF instantly with your manual edits.
+-   **📊 ATS Analysis & Scoring**: Get a detailed match score (0-100) and specific feedback using Gemini 1.5 Pro.
+    -   Identifies missing keywords.
+    -   Highlights strong matching areas.
+    -   Provides actionable recommendations.
+-   **💡 Smart Q&A**: Ask questions about the job description in the context of your resume (e.g., "Do I have the required Python experience?").
 -   **🤖 Multi-Model Support**:
-    -   **Primary**: Google Gemini 1.5 Flash / 2.0 Flash.
-    -   **Fallback**: Gemma 2 27B (via Gemini API).
-    -   **Groq**: Ultra-fast inference with Llama 3 / Qwen.
+    -   **Primary**: Google Gemini 1.5 Flash / 2.0 Flash level.
+    -   **Fallback**: Gemma 2 27B.
+    -   **Groq**: Ultra-fast inference with Llama 3.
     -   **Ollama**: Local model support.
-    -   **OpenRouter**: Access to other models like Deepseek.
 -   **📄 PDF Parsing with Link Extraction**: Extracts text and hidden hyperlinks (LinkedIn/Portfolio) from your existing PDF resume.
 -   **🎨 Professional Layout**: Generates clean, polished PDFs using ReportLab with:
     -   Smart spacing adjustments (1pt precision).
     -   Overflow handling (smart trimming of optional bullets/projects).
     -   Clickable hyperlinks.
--   **🧩 Chrome Extension**: Tailor your resume directly from any job post page in your browser.
+-   **🧩 Chrome Extension**: Tailor, Edit, and Analyze your resume directly from any job post page.
 -   **💾 Persistence**: Saves your base profile (`user_profile.json`) so you don't need to re-upload every time.
 
 ## 🛠️ Prerequisites
@@ -80,9 +89,13 @@ Tailor resumes directly while browsing job sites.
 3.  **Use It**:
     -   Navigate to a job posting (e.g., LinkedIn, Greenhouse, Lever).
     -   Click the extension icon.
-    -   If it's your first time, you'll be prompted to upload your base resume PDF.
-    -   Click **Generate Resume**.
-    -   The tailored PDF will be created in the `generated_resumes/` folder.
+    -   **Setup (First Time)**: If you haven't uploaded a resume yet, you'll be prompted to upload your base PDF to create your profile.
+    -   **Generate**: Click "Process Page & Generate Resume" to create an initial tailored version.
+    -   **Edit**: Click "✏️ Edit Resume" to tweak content. You can add/remove bullets, jobs, or skills. Changes auto-save!
+        -   Click "Save & Regenerate" to update the PDF.
+    -   **Analyze**: Click "📊 Analyze ATS Score" to see how well you match the JD and get improvement tips.
+    -   **Ask**: Use the Smart Q&A box to prepare for interviews or clarify requirements.
+    -   The final PDF is saved in `generated_resumes/` and can be downloaded or previewed.
 
 ## 📂 Project Structure
 
