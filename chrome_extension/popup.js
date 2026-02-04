@@ -12,13 +12,18 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentViewUrl = '';
 
     // Restore State
-    chrome.storage.local.get(['lastViewUrl', 'lastStatus', 'lastCompany'], (result) => {
+    chrome.storage.local.get(['lastViewUrl', 'lastStatus', 'lastCompany', 'lastJobContext'], (result) => {
         if (result.lastViewUrl) {
             currentViewUrl = result.lastViewUrl;
             actionsDiv.style.display = 'block';
             statusDiv.textContent = result.lastStatus || 'Restored previous session.';
             if (result.lastCompany) {
                 savePathSpan.textContent = `generated_resumes/${result.lastCompany}/...`;
+            }
+            if (result.lastJobContext) {
+                const jobContextDiv = document.getElementById('jobContext');
+                jobContextDiv.style.display = 'block';
+                jobContextDiv.innerHTML = `Active Job: <strong>${result.lastJobContext}</strong>`;
             }
         }
     });
@@ -152,7 +157,20 @@ document.addEventListener('DOMContentLoaded', function () {
             };
 
             // 3. Send to local server
-            statusDiv.textContent = `Generating with ${providerNames[provider]}...`;
+            let shortUrl = "current page";
+            try {
+                const urlObj = new URL(jobUrl);
+                shortUrl = urlObj.origin; // e.g. https://www.linkedin.com
+            } catch (e) {
+                console.log("Could not parse URL");
+            }
+
+            // Update Context UI immediately
+            const jobContextDiv = document.getElementById('jobContext');
+            jobContextDiv.style.display = 'block';
+            jobContextDiv.innerHTML = `Active Job: <strong>${shortUrl}</strong>`;
+
+            statusDiv.innerHTML = `Generating for <strong>${shortUrl}</strong><br>with ${providerNames[provider]}...`;
 
             const response = await fetch('http://localhost:8000/generate', {
                 method: 'POST',
@@ -189,7 +207,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     lastStatus: 'Resume generated successfully!',
                     lastCompany: companyName,
                     lastResumeData: data.resume_data,
-                    lastJdText: jdText
+                    lastJdText: jdText,
+                    lastJobContext: shortUrl // Save the context!
                 });
 
             } else {

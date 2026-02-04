@@ -115,3 +115,12 @@ Tailor resumes directly while browsing job sites.
 -   **Missing LinkedIn/Portfolio Links**: Make sure to re-upload your resume if you haven't recently. We added a fix to extract hidden hyperlinks from PDFs.
 -   **Summary too short?**: We recently adjusted the prompt. If it's still short, check the logs in `main.py` to see the AI response.
 -   **API Errors**: Check your `.env` file and ensure your API quota isn't exceeded. The system tries to fallback to Gemma 2 if Gemini fails.
+
+## 🔒 Data Privacy & Permissions
+
+**Why does this extension request access to "all websites"?**
+Because this tool uses the **Side Panel** to allow you to generate resumes while browsing *any* job board (LinkedIn, Indeed, Company Careers pages, etc.), it requires the `activeTab` or `<all_urls>` permission to read the job description from the page you are currently viewing.
+
+-   **On-Demand Access**: The extension **ONLY** reads the content of a page when you explicitly click the **"Process Page & Generate Resume"** button.
+-   **No Background Tracking**: It does not track your browsing history or read data from tabs you are not actively using for resume generation.
+-   **Local Processing**: Your personal data (resume profile) stays on your machine (in `user_profile.json` and Chrome Local Storage). It is only sent to the AI provider (e.g., Google Gemini) for the specific purpose of generating the resume.
