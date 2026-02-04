@@ -788,5 +788,115 @@ document.addEventListener('DOMContentLoaded', function () {
             saveRegenBtn.textContent = "Save & Regenerate";
         }
     });
+
+    // --- COPY CONTENT LOGIC ---
+    const copyContentBtn = document.getElementById('copyContentBtn');
+    const copyUI = document.getElementById('copyUI');
+    const closeCopyBtn = document.getElementById('closeCopyBtn');
+    const copyList = document.getElementById('copyList');
+
+    copyContentBtn.addEventListener('click', async () => {
+        // Load data if not already loaded (similar to edit)
+        let dataToCopy = null;
+        const result = await chrome.storage.local.get(['lastResumeData']);
+        if (result.lastResumeData) {
+            dataToCopy = result.lastResumeData;
+        } else {
+            alert("No resume data found.");
+            return;
+        }
+
+        // Show Copy UI
+        copyUI.style.display = 'block';
+        actionsDiv.style.display = 'none';
+
+        renderCopyUI(dataToCopy);
+    });
+
+    closeCopyBtn.addEventListener('click', () => {
+        copyUI.style.display = 'none';
+        actionsDiv.style.display = 'block';
+    });
+
+    function renderCopyUI(data) {
+        copyList.innerHTML = '';
+
+        // Helper to create sections
+        const createSection = (title, items, type) => {
+            if (!items || items.length === 0) return;
+
+            const header = document.createElement('h4');
+            header.style.cssText = "margin: 10px 0 5px 0; color: #555; text-transform: uppercase; font-size: 11px; border-bottom: 1px solid #eee; padding-bottom: 2px;";
+            header.textContent = title;
+            copyList.appendChild(header);
+
+            items.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.style.cssText = "background: #fff; border: 1px solid #eee; border-radius: 4px; padding: 8px; margin-bottom: 8px;";
+
+                // Title Construction
+                let titleText = "";
+                let subtitleText = "";
+
+                if (type === 'experience') {
+                    titleText = item.company || "Company";
+                    subtitleText = item.role || item.title || "Role";
+                } else if (type === 'project') {
+                    titleText = item.name || "Project";
+                    subtitleText = item.tech || "";
+                }
+
+                div.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 5px;">
+                        <div>
+                            <div style="font-weight: bold; font-size: 12px;">${titleText}</div>
+                            <div style="font-size: 11px; color: #666;">${subtitleText}</div>
+                        </div>
+                        <button class="copy-btn" data-type="${type}" data-index="${index}" 
+                            style="width: auto; padding: 4px 8px; font-size: 11px; background: #e9ecef; color: #333; border: 1px solid #ccc;">
+                            📋 Copy Desc.
+                        </button>
+                    </div>
+                    <div style="font-size: 10px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        ${(item.bullets || []).join(' ')}
+                    </div>
+                `;
+                copyList.appendChild(div);
+            });
+        };
+
+        createSection('Experience', data.experience, 'experience');
+        createSection('Projects', data.projects, 'project');
+
+        // Add Event Listeners to new buttons
+        const matchBtns = copyList.querySelectorAll('.copy-btn');
+        matchBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const type = btn.dataset.type;
+                const index = btn.dataset.index;
+                let textToCopy = "";
+
+                if (type === 'experience') {
+                    const item = data.experience[index];
+                    if (item.bullets) textToCopy = item.bullets.map(b => `• ${b}`).join('\n');
+                } else if (type === 'project') {
+                    const item = data.projects[index];
+                    if (item.bullets) textToCopy = item.bullets.map(b => `• ${b}`).join('\n');
+                }
+
+                if (textToCopy) {
+                    navigator.clipboard.writeText(textToCopy).then(() => {
+                        const originalText = btn.textContent;
+                        btn.textContent = "✅ Copied!";
+                        btn.style.background = "#d4edda";
+                        setTimeout(() => {
+                            btn.textContent = originalText;
+                            btn.style.background = "#e9ecef";
+                        }, 1500);
+                    });
+                }
+            });
+        });
+    }
 });
 

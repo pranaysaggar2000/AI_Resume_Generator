@@ -4,12 +4,18 @@
 <head>
   <meta charset="UTF-8">
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      width: 320px;
+      width: 100%;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       padding: 15px;
       margin: 0;
       background-color: #f8f9fa;
+      overflow-x: hidden;
+      /* Prevent horizontal scroll */
     }
 
     h1 {
@@ -135,12 +141,23 @@
       <button id="previewBtn" style="background: #28a745; margin-bottom: 8px;">preview pdf</button>
       <button id="downloadBtn" style="background: #17a2b8; margin-bottom: 8px;">Download PDF</button>
       <button id="editBtn" style="background: #ffc107; color: #333; margin-bottom: 8px;">✏️ Edit Resume</button>
+      <button id="copyContentBtn" style="background: #17a2b8; margin-bottom: 8px;">📋 Copy Content</button>
       <button id="analyzeBtn" style="background: linear-gradient(90deg, #8E2DE2, #4A00E0); margin-bottom: 8px;">📊
         Analyze ATS Score</button>
 
       <div style="font-size: 11px; color: #555; margin-top: 5px; text-align: center;">
         Saved to: <span id="savePath" style="font-family: monospace;"></span>
       </div>
+    </div>
+
+    <!-- Copy UI (Hidden by default) -->
+    <div id="copyUI" style="display: none; margin-top: 15px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <h3 style="margin: 0; font-size: 14px;">Copy Resume Details</h3>
+        <button id="closeCopyBtn"
+          style="width: auto; padding: 5px 10px; background: #6c757d; font-size: 12px;">Back</button>
+      </div>
+      <div id="copyList" style="max-height: 400px; overflow-y: auto;"></div>
     </div>
 
     <!-- Editor UI (Hidden by default) -->

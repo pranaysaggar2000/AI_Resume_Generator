@@ -10,6 +10,7 @@ An advanced, AI-powered tool that generates ATS-optimized resumes tailored to sp
     -   **Auto-Save**: Never lose your progress; changes persist between tab switches.
     -   **Contact Management**: Edit Location, Links, and contact details easily.
     -   **Live Regeneration**: Update the PDF instantly with your manual edits.
+-   **📋 One-Click Copy**: Easily copy tailored experience and project descriptions to your clipboard for pasting into job application portals (e.g., Workday).
 -   **📊 ATS Analysis & Scoring**: Get a detailed match score (0-100) and specific feedback using Gemini 1.5 Pro.
     -   Identifies missing keywords.
     -   Highlights strong matching areas.
@@ -25,7 +26,8 @@ An advanced, AI-powered tool that generates ATS-optimized resumes tailored to sp
     -   Smart spacing adjustments (1pt precision).
     -   Overflow handling (smart trimming of optional bullets/projects).
     -   Clickable hyperlinks.
--   **🧩 Chrome Extension**: Tailor, Edit, and Analyze your resume directly from any job post page.
+-   **🧩 Chrome Side Panel**: The tool attempts to open in the Side Panel, allowing it to stay open ("persist") while you browse and interact with different job postings.
+    -   Tailor, Edit, and Analyze your resume directly alongside the job post.
 -   **💾 Persistence**: Saves your base profile (`user_profile.json`) so you don't need to re-upload every time.
 
 ## 🛠️ Prerequisites
@@ -93,6 +95,7 @@ Tailor resumes directly while browsing job sites.
     -   **Generate**: Click "Process Page & Generate Resume" to create an initial tailored version.
     -   **Edit**: Click "✏️ Edit Resume" to tweak content. You can add/remove bullets, jobs, or skills. Changes auto-save!
         -   Click "Save & Regenerate" to update the PDF.
+    -   **Copy**: Click "📋 Copy Content" to open a list of your tailored experiences and projects. Click the copy button next to any item to grab the text for job application forms.
     -   **Analyze**: Click "📊 Analyze ATS Score" to see how well you match the JD and get improvement tips.
     -   **Ask**: Use the Smart Q&A box to prepare for interviews or clarify requirements.
     -   The final PDF is saved in `generated_resumes/` and can be downloaded or previewed.
