@@ -93,27 +93,45 @@
 </head>
 
 <body>
-  <h1><span class="icon">📄</span> Resume Generator</h1>
+  <h1>
+    <div style="display: flex; align-items: center; flex-grow: 1;">
+      <span class="icon">📄</span> Resume Generator
+    </div>
+    <button id="settingsToggle"
+      style="width: auto; padding: 5px; background: transparent; color: #555; border: 1px solid #ddd; font-size: 16px;">⚙️</button>
+  </h1>
 
   <p style="font-size: 13px; color: #555; margin-bottom: 15px;">
     Navigate to a job posting and click Generate.
   </p>
+
+  <!-- Settings UI (Hidden by default) -->
+  <div id="settingsUI"
+    style="display: none; margin-bottom: 20px; padding: 15px; background: #fff; border: 1px solid #ddd; border-radius: 6px;">
+    <h3 style="margin-top: 0; font-size: 14px;">⚙️ Settings</h3>
+
+    <label for="apiKey" style="display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px;">Gemini API
+      Key</label>
+    <input type="password" id="apiKey" placeholder="Enter your Gemini API Key"
+      style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+
+    <div style="font-size: 11px; color: #666; margin-bottom: 15px;">
+      Get your key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>.
+    </div>
+
+    <button id="saveSettingsBtn" style="background: #28a745;">Save Settings</button>
+    <div id="settingsStatus" style="font-size: 12px; margin-top: 5px;"></div>
+  </div>
 
   <div id="jobContext"
     style="display: none; background: #e3f2fd; color: #0d47a1; padding: 8px; border-radius: 4px; font-size: 12px; margin-bottom: 15px; border: 1px solid #bbdefb; text-align: center;">
     Active Job: <strong>Loading...</strong>
   </div>
 
-  <!-- Provider Dropdown -->
-  <div style="margin-bottom: 15px; background: #fff; padding: 10px; border-radius: 6px; border: 1px solid #eee;">
-    <label for="providerSelect" style="display: block; font-size: 13px; font-weight: 500; margin-bottom: 8px;">AI
-      Provider</label>
-    <select id="providerSelect"
-      style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; background: #fff; cursor: pointer;">
-      <option value="gemini">☁️ Gemini (Cloud)</option>
-      <option value="ollama">💻 Ollama (Local)</option>
-      <option value="openrouter">🌐 OpenRouter (Cloud)</option>
-      <option value="groq">⚡ Groq (Fastest)</option>
+  <!-- Provider Dropdown (Hidden, using Settings instead) -->
+  <div style="display: none;">
+    <select id="providerSelect">
+      <option value="gemini">gemini</option>
     </select>
   </div>
 

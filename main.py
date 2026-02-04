@@ -6,7 +6,6 @@ Tailors a resume based on a Job Description using Google Gemini API.
 import os
 import json
 import re
-from dotenv import load_dotenv
 import google.generativeai as genai
 from resume_builder import create_resume_pdf
 import io
@@ -15,13 +14,11 @@ import requests
 from pydantic import BaseModel, Field
 from typing import List
 
-# Load environment variables
-load_dotenv()
+# Configure Gemini (Default)
+if os.getenv("GEMINI_API_KEY"):
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# Configure Gemini
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-2.5-flash")
-
+model = genai.GenerativeModel("gemini-2.5-flash") # Default model
 
 # Model provider options
 PROVIDERS = ["gemini", "ollama", "openrouter", "groq"]
@@ -158,8 +155,19 @@ def query_groq(prompt: str, expect_json: bool = False) -> str:
             
     return "" # All failed
 
-def query_provider(prompt: str, provider: str = "gemini", expect_json: bool = False) -> str:
+def query_provider(prompt: str, provider: str = "gemini", expect_json: bool = False, api_key: str = None) -> str:
     """Query the specified AI provider."""
+    
+    # Configure Gemini if key is provided
+    if provider == "gemini" and api_key:
+        genai.configure(api_key=api_key)
+    
+    # Configure Groq if key is provided (though usually passed in headers)
+    # For Groq, we handle it in query_groq by overriding os.getenv if needed, 
+    # but strictly query_groq reads from env. Let's pass it if possible.
+    # Note: query_groq implementation currently reads env. We should ideally pass it.
+    # For now, we'll focus on Gemini BYOK as primarily requested.
+    
     if provider == "ollama":
         print("   Using Ollama (Local)...")
         return query_ollama(prompt)
@@ -217,7 +225,7 @@ def query_provider(prompt: str, provider: str = "gemini", expect_json: bool = Fa
                 return query_groq(prompt, expect_json=expect_json)
 
 
-def analyze_resume_with_jd(resume_data: dict, jd_text: str) -> dict:
+def analyze_resume_with_jd(resume_data: dict, jd_text: str, api_key: str = None) -> dict:
     """
     Analyze the resume against the JD using Gemini 3 Pro Preview (or Groq fallback).
     Returns a dict with score and feedback.
@@ -251,7 +259,7 @@ def analyze_resume_with_jd(resume_data: dict, jd_text: str) -> dict:
         # We explicitly want to use the high-end model for this
         print("   🧠 Analyzing with Gemini 3 Pro Preview...")
         
-        response_text = query_provider(prompt, provider="gemini")
+        response_text = query_provider(prompt, provider="gemini", api_key=api_key)
         print(f"DEBUG: Raw Analysis Response: {response_text}")
         
         # internal helper to clean json
@@ -305,7 +313,7 @@ def extract_text_from_pdf(file_stream) -> str:
         return ""
 
 
-def extract_base_resume_info(resume_text: str) -> dict:
+def extract_base_resume_info(resume_text: str, api_key: str = None) -> dict:
     """
     Extract base resume information from text using Gemini.
     Returns a JSON dict matching the get_base_resume structure.
@@ -374,7 +382,7 @@ def extract_base_resume_info(resume_text: str) -> dict:
     """
     
     try:
-        response_text = query_provider(prompt, provider="gemini")
+        response_text = query_provider(prompt, provider="gemini", api_key=api_key)
         json_match = re.search(r'\{[\s\S]*\}', response_text)
         if json_match:
             return json.loads(json_match.group())
@@ -592,7 +600,7 @@ def get_jd_analysis_prompt(jd_text: str) -> str:
     {jd_text}
     """
 
-def parse_job_description(jd_text: str, provider: str = "gemini") -> dict:
+def parse_job_description(jd_text: str, provider: str = "gemini", api_key: str = None) -> dict:
     """
     Use AI provider to analyze the job description and extract key information.
     
@@ -632,7 +640,7 @@ Be thorough in extracting keywords.
 """
     
     try:
-        response_text = query_provider(prompt, provider)
+        response_text = query_provider(prompt, provider, api_key=api_key)
         
         # Try to find JSON in the response
         json_match = re.search(r'\{[\s\S]*\}', response_text)
@@ -712,7 +720,7 @@ def clean_tailored_resume(resume_data: dict) -> dict:
     return resume_data
 
 
-def tailor_resume(base_resume: dict, jd_analysis: dict, provider: str = "gemini") -> dict:
+def tailor_resume(base_resume: dict, jd_analysis: dict, provider: str = "gemini", api_key: str = None) -> dict:
     """
     Use AI provider to tailor the resume content for ATS optimization.
     Preserves all metrics and facts, only adjusts vocabulary.

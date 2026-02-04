@@ -271,10 +271,10 @@ def create_aligned_row(left_text, right_text, style_obj):
     t.hAlign = 'LEFT'
     return t
 
-def generate_resume(data, filename):
+def generate_resume(data, filename_or_buffer):
     # Use BaseDocTemplate for precise frame control (zero padding)
     doc = BaseDocTemplate(
-        filename,
+        filename_or_buffer,
         pagesize=letter,
         leftMargin=MARGIN_SIDE,
         rightMargin=MARGIN_SIDE,
@@ -383,7 +383,7 @@ def generate_resume(data, filename):
 
 
 # Adapter for compatibility with main.py
-def create_resume_pdf(data, output_path):
+def create_resume_pdf(data, output_path_or_buffer):
     """
     Adapter to convert main.py's data structure to the new generate_resume format.
     Includes automatic height estimation and trimming to ensure single-page output.
@@ -460,6 +460,6 @@ def create_resume_pdf(data, output_path):
     
     print(f"   📏 Final height: {estimated_height:.0f}pt")
 
-    generate_resume(new_data, output_path)
-    return output_path
+    generate_resume(new_data, output_path_or_buffer)
+    return output_path_or_buffer
 
