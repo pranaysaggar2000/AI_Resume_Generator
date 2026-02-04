@@ -20,8 +20,7 @@ os.makedirs(RESUME_DIR, exist_ok=True)
 
 @app.route('/view/<path:filename>', methods=['GET'])
 def view_resume(filename):
-    """Serve the generated resume PDF."""
-
+    """Serve the generated resume PDF. Handles nested paths."""
     return send_from_directory(RESUME_DIR, filename)
 
 @app.route('/answer_question', methods=['POST'])
@@ -80,12 +79,20 @@ def generate_resume():
         tailored_resume = tailor_resume(base_resume, jd_analysis, provider=provider)
         
         # 3. Create Directory Structure
-        company_name = extract_company_name(job_url)
-        company_dir = os.path.join(RESUME_DIR, company_name)
+        # Use AI-extracted names if available, fallback to URL parsing
+        ai_company = jd_analysis.get('company_name', 'Unknown_Company').replace(" ", "_").replace("/", "-")
+        ai_job_id = jd_analysis.get('job_identifier', 'Job').replace(" ", "_").replace("/", "-")
+        
+        if ai_company == "Unknown_Company":
+             ai_company = extract_company_name(job_url)
+        
+        # Structure: generated_resumes/{Company}/{Job_ID}/
+        # E.g. generated_resumes/Google/Senior_Software_Engineer/
+        company_dir = os.path.join(RESUME_DIR, ai_company, ai_job_id)
         os.makedirs(company_dir, exist_ok=True)
         
         # 4. Generate PDF
-        print(f"Generating PDF for {company_name}...")
+        print(f"Generating PDF for {ai_company} / {ai_job_id}...")
         safe_name = base_resume.get('name', 'Resume').replace(" ", "_")
         filename = f"{safe_name}_Resume.pdf"
         output_path = os.path.join(company_dir, filename)
@@ -93,8 +100,12 @@ def generate_resume():
         create_resume_pdf(tailored_resume, output_path)
         
         # 5. Return URL for preview
-        # Construct local URL
-        view_url = f"http://localhost:8000/view/{company_name}/{filename}"
+        # Construct local URL with nested path
+        # Encode parts to ensure URL safety
+        from urllib.parse import quote
+        safe_company_url = quote(ai_company)
+        safe_job_url = quote(ai_job_id)
+        view_url = f"http://localhost:8000/view/{safe_company_url}/{safe_job_url}/{filename}"
         
         return jsonify({
             "status": "success",

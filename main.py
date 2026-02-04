@@ -12,6 +12,8 @@ from resume_builder import create_resume_pdf
 import io
 import pypdf
 import requests
+from pydantic import BaseModel, Field
+from typing import List
 
 # Load environment variables
 load_dotenv()
@@ -569,6 +571,27 @@ def get_base_resume() -> dict:
     }
 
 
+class JDAnalysis(BaseModel):
+    summary: str = Field(description="A concise summary of the job description.")
+    keywords: List[str] = Field(description="Keywords mentioned in the job description.")
+    required_skills: List[str] = Field(description="Skills required for the job.")
+    company_name: str = Field(description="The canonical name of the hiring company (e.g., 'Google', 'Anthropic'). Do not use generic terms like 'Company'. If unknown, use 'Unknown_Company'.")
+    job_identifier: str = Field(description="A short, file-safe identifier for the job. Prefer 'Job_<ID>' if a Job ID is prominent. Otherwise use 'Role_Name' (e.g., 'Software_Engineer'). Replace spaces with underscores.")
+
+def get_jd_analysis_prompt(jd_text: str) -> str:
+    return f"""
+    Analyze the following Job Description (JD) and extract the key information.
+    
+    1.  **Summary**: A concise summary of the role and what they are looking for.
+    2.  **Keywords**: A list of important keywords and technical terms found in the JD.
+    3.  **Required Skills**: A list of explicit hard skills required.
+    4.  **Company Name**: The name of the company hiring. Be precise.
+    5.  **Job Identifier**: If a Job ID is found (e.g., 'R12345'), use that. If not, use the Job Title, but format it as snake_case (e.g., 'Senior_Data_Scientist'). Keep it short.
+    
+    Job Description:
+    {jd_text}
+    """
+
 def parse_job_description(jd_text: str, provider: str = "gemini") -> dict:
     """
     Use AI provider to analyze the job description and extract key information.
@@ -588,6 +611,8 @@ Job Description:
 
 Extract and return this JSON structure:
 {{
+    "company_name": "The precise name of the company hiring (e.g., 'Google', 'Anthropic'). Do not use 'Unknown' unless absolutely necessary.",
+    "job_identifier": "A short, unique identifier for the folder name. Use the Job ID if found (e.g., 'R12345'), otherwise use the Role Name in Snake Case (e.g., 'Senior_Software_Engineer').",
     "location": "City, State (extract ONLY the primary location, do not list multiple)",
     "job_title": "The exact job title from the posting",
     "mandatory_keywords": ["list", "of", "required", "technical", "skills"],
@@ -597,7 +622,7 @@ Extract and return this JSON structure:
     "industry_terms": ["domain-specific", "terminology"],
     "years_experience": "number or range if mentioned",
     "domain_context": "The industry/sector (e.g., Fintech, AdTech, Healthcare)",
-    "tech_stack_nuances": ["specific versions (Java 17)", "sub-tools (BigQuery, not just GCP)", "specific libraries"],
+    "tech_stack_nuances": ["specific versions (Java 17) only if mentioned in JD", "sub-tools (BigQuery, not just GCP)", "specific libraries"],
     "key_metrics_emphasis": ["scale (millions of users)", "speed (low latency)", "revenue", "efficiency"]
 }}
 
@@ -622,6 +647,8 @@ Be thorough in extracting keywords.
 
     # Fallback structure
     return {
+        "company_name": "Unknown_Company",
+        "job_identifier": "Resume_Job",
         "location": "Remote",
         "job_title": "Data Scientist",
         "mandatory_keywords": [],

@@ -194,12 +194,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (data.status === 'success' && data.view_url) {
                 currentViewUrl = data.view_url;
-                const companyName = data.view_url.split('/')[4];
+                const parts = data.view_url.split('/');
+                // view_url is http://localhost:8000/view/Company/Job/Filename
+                // parts: [http:, "", localhost:8000, view, Company, Job, Filename]
+                const companyName = parts[4];
+                const jobId = parts[5];
 
                 // Show Actions
                 statusDiv.textContent = 'Resume generated successfully!';
                 actionsDiv.style.display = 'block';
-                savePathSpan.textContent = `generated_resumes/${companyName}/...`;
+                savePathSpan.textContent = `generated_resumes/${decodeURIComponent(companyName)}/${decodeURIComponent(jobId)}/...`;
 
                 // Store data for analysis
                 chrome.storage.local.set({
